@@ -1,0 +1,8 @@
+@import '@repo/ui/globals.css';
+
+/*
+ * Tailwind detects sources automatically, but @repo/ui is reached through a
+ * node_modules symlink whose scanning root is the ui package. Declare this
+ * app's own renderer sources explicitly so their utilities are generated.
+ */
+@source '../';
