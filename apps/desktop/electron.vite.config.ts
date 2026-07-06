@@ -5,10 +5,13 @@ import { resolve } from 'path'
 
 export default defineConfig({
   main: {
-    // @repo/api ships TypeScript source with no build step, so it can't be
-    // externalized and require()'d at runtime. Bundle it into the main process
-    // (Vite resolves its ".js" import specifiers to the ".ts" sources).
-    plugins: [externalizeDepsPlugin({ exclude: ['@repo/api'] })]
+    // @repo/api and @repo/db ship TypeScript source with no build step, so they
+    // can't be externalized and require()'d at runtime. Bundle them into the
+    // main process (Vite resolves their ".js" import specifiers to the ".ts"
+    // sources). better-sqlite3 is a native module and stays externalized (it's a
+    // direct dependency of this app), so it's require()'d from node_modules at
+    // runtime rather than bundled.
+    plugins: [externalizeDepsPlugin({ exclude: ['@repo/api', '@repo/db'] })]
   },
   preload: {},
   renderer: {

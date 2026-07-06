@@ -2,6 +2,7 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { onError } from '@orpc/server'
 import { RPCHandler } from '@orpc/server/message-port'
 import { appRouter } from '@repo/api'
+import { createDb } from '@repo/db'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
@@ -48,6 +49,20 @@ app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
+  // Open the local SQLite database. Created here (not at module load) because
+  // app.getPath is only available once ready.
+  //
+  // In development we point at `packages/db/dev.db` — the same file
+  // `drizzle-kit push` writes to (run `pnpm --filter @repo/db db:push`) — so the
+  // schema pushed there is what the running app sees. `pnpm dev` runs with the
+  // app dir as cwd, so this resolves to <repo>/packages/db/dev.db. In production
+  // each install gets its own database under the per-user data directory.
+  const dbPath = is.dev
+    ? join(process.cwd(), '../../packages/db/dev.db')
+    : join(app.getPath('userData'), 'app.db')
+
+  const db = createDb(dbPath)
+
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
@@ -58,10 +73,11 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  // Upgrade the port forwarded by the preload script into an oRPC connection.
+  // Upgrade the port forwarded by the preload script into an oRPC connection,
+  // supplying the database as the initial server context.
   ipcMain.on('start-orpc-server', (event) => {
     const [serverPort] = event.ports
-    orpcHandler.upgrade(serverPort)
+    orpcHandler.upgrade(serverPort, { context: { db } })
     serverPort.start()
   })
 

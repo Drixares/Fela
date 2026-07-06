@@ -24,7 +24,9 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@repo/api": "workspace:*",
-    "@repo/ui": "workspace:*"
+    "@repo/db": "workspace:*",
+    "@repo/ui": "workspace:*",
+    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",

@@ -11,8 +11,8 @@ function App(): React.JSX.Element {
   const [receivedAt, setReceivedAt] = useState<string | null>(null)
 
   const logOnServer = async (): Promise<void> => {
-    const { receivedAt } = await client.test.log({ message: 'Hello from renderer' })
-    setReceivedAt(receivedAt)
+    const { createdAt } = await client.messages.add({ content: 'Hello from renderer' })
+    setReceivedAt(createdAt.toISOString())
   }
 
   return (

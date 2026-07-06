@@ -1,25 +1,26 @@
 {
-  "name": "@repo/api",
+  "name": "@repo/db",
   "version": "0.0.0",
   "type": "module",
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client.ts"
+    "./schema": "./src/schema.ts"
   },
   "scripts": {
+    "db:push": "node drizzle.mjs push",
+    "db:studio": "node drizzle.mjs studio",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@orpc/client": "^1.14.6",
-    "@orpc/contract": "^1.14.7",
-    "@orpc/server": "^1.14.6",
-    "@repo/db": "workspace:*",
-    "zod": "^4.4.3"
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "drizzle-kit": "^0.31.10",
     "typescript": "5.9.2"
   }
 }

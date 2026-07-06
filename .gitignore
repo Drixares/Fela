@@ -33,6 +33,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Local SQLite databases (drizzle dev.db, WAL/SHM sidecars)
+*.db
+*.db-shm
+*.db-wal
+
 # Misc
 .DS_Store
 *.pem
