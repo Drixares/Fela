@@ -1,10 +1,19 @@
 import { Button, buttonVariants } from '@repo/ui/components/button'
+import { useState } from 'react'
 
 import electronLogo from './assets/electron.svg'
 import Versions from './components/Versions'
+import { client } from './lib/orpc'
 
 function App(): React.JSX.Element {
   const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
+
+  const [receivedAt, setReceivedAt] = useState<string | null>(null)
+
+  const logOnServer = async (): Promise<void> => {
+    const { receivedAt } = await client.test.log({ message: 'Hello from renderer' })
+    setReceivedAt(receivedAt)
+  }
 
   return (
     <>
@@ -20,6 +29,10 @@ function App(): React.JSX.Element {
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={ipcHandle}>Send IPC</Button>
 
+        <Button variant="secondary" onClick={logOnServer}>
+          Log on server
+        </Button>
+
         <a
           href="https://electron-vite.org/"
           target="_blank"
@@ -29,6 +42,7 @@ function App(): React.JSX.Element {
           Documentation
         </a>
       </div>
+      {receivedAt && <p className="tip">Server received at {receivedAt}</p>}
       <Versions></Versions>
     </>
   )

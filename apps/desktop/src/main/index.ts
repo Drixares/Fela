@@ -1,10 +1,16 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { electronApp, is, optimizer } from '@electron-toolkit/utils'
+import { onError } from '@orpc/server'
+import { RPCHandler } from '@orpc/server/message-port'
+import { appRouter } from '@repo/api'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+const orpcHandler = new RPCHandler(appRouter, {
+  interceptors: [onError((error) => console.error(error))]
+})
+
 function createWindow(): void {
-  // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
@@ -51,6 +57,13 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  // Upgrade the port forwarded by the preload script into an oRPC connection.
+  ipcMain.on('start-orpc-server', (event) => {
+    const [serverPort] = event.ports
+    orpcHandler.upgrade(serverPort)
+    serverPort.start()
+  })
 
   createWindow()
 

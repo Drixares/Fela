@@ -1,8 +1,14 @@
-import { contextBridge } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import { contextBridge, ipcRenderer } from 'electron'
 
-// Custom APIs for renderer
 const api = {}
+
+window.addEventListener('message', (event) => {
+  if (event.data === 'start-orpc-client') {
+    const [serverPort] = event.ports
+    ipcRenderer.postMessage('start-orpc-server', null, [serverPort])
+  }
+})
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise
