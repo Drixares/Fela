@@ -28,6 +28,10 @@ export const transactions = sqliteTable(
     note: text("note"),
     // Links the two legs of a transfer between accounts.
     transferId: text("transfer_id"),
+    // Heuristic dedup fingerprint set on CSV-imported rows (account + date +
+    // amount + normalised label) so re-importing an overlapping export never
+    // creates doubles (see issue #8). Null on manually entered rows.
+    importFingerprint: text("import_fingerprint"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -35,6 +39,7 @@ export const transactions = sqliteTable(
   (t) => [
     index("tx_account_idx").on(t.accountId),
     index("tx_date_idx").on(t.date),
+    index("tx_import_fingerprint_idx").on(t.importFingerprint),
   ]
 );
 

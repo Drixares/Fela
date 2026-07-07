@@ -15,6 +15,13 @@
       "when": 1783427681796,
       "tag": "0001_tidy_slipstream",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783452891801,
+      "tag": "0002_sticky_micromacro",
+      "breakpoints": true
     }
   ]
 }
