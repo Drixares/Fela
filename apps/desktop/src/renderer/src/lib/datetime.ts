@@ -45,6 +45,16 @@ export function fromDateInputValue(value: string): Date {
   return new Date(year, month - 1, day)
 }
 
+/**
+ * Parse a `yyyy-mm-dd` input value into a local `Date` at the last instant of
+ * that day — the inclusive upper bound of a period filter, so transactions
+ * carrying any time on the chosen day still fall inside the period.
+ */
+export function fromDateInputValueEndOfDay(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day, 23, 59, 59, 999)
+}
+
 /** Format a byte count as a short human-readable size, e.g. `1 536` → « 1,5 Ko ». */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`

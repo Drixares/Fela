@@ -178,15 +178,15 @@ test("transactions.list returns every account's transactions, most recent first"
   );
 
   const all = await call(appRouter.transactions.list, undefined, { context });
-  expect(all.map((t) => t.payee)).toEqual([
+  expect(all.transactions.map((t) => t.payee)).toEqual([
     "Boulangerie", // 03-03
     "Remboursement", // 03-02
     "Carrefour", // 03-01
   ]);
   // Rows from every account carry their account's name for display.
-  expect(all.find((t) => t.payee === "Boulangerie")?.accountName).toBe(
-    "Espèces"
-  );
+  expect(
+    all.transactions.find((t) => t.payee === "Boulangerie")?.accountName
+  ).toBe("Espèces");
 
   // Filtered to a single account, only that account's rows come back.
   const checkingOnly = await call(
@@ -194,7 +194,7 @@ test("transactions.list returns every account's transactions, most recent first"
     { accountId: checking },
     { context }
   );
-  expect(checkingOnly.map((t) => t.payee)).toEqual([
+  expect(checkingOnly.transactions.map((t) => t.payee)).toEqual([
     "Remboursement",
     "Carrefour",
   ]);
@@ -316,7 +316,7 @@ test("transactions.delete removes the entry and restores the balance", async () 
 
   expect(await balanceOf(context, accountId)).toBe(10_000);
   const list = await call(appRouter.transactions.list, undefined, { context });
-  expect(list).toHaveLength(0);
+  expect(list.transactions).toHaveLength(0);
 });
 
 test("transactions.delete on a missing transaction rejects", async () => {
@@ -352,6 +352,472 @@ test("the full manual cycle keeps the balance in step at every stage", async () 
   expect(await balanceOf(context, accountId)).toBe(0);
 });
 
+/** Create an expense category and return its id — a fixture for the filter tests. */
+async function makeCategory(
+  context: ServerContext,
+  name: string
+): Promise<number> {
+  const category = await call(
+    appRouter.categories.create,
+    { name, kind: "expense" },
+    { context }
+  );
+  return category.id;
+}
+
+test("transactions.list search matches payee and note, ignoring case", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -2_000,
+      date: new Date("2026-03-01"),
+      payee: "Amazon Marketplace",
+    },
+    { context }
+  );
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: 1_500,
+      date: new Date("2026-03-02"),
+      payee: "Employeur",
+      note: "Remboursement Amazon",
+    },
+    { context }
+  );
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -3_000,
+      date: new Date("2026-03-03"),
+      payee: "Carrefour",
+    },
+    { context }
+  );
+
+  const amazon = await call(
+    appRouter.transactions.list,
+    { search: "amazon" },
+    { context }
+  );
+  expect(amazon.transactions.map((t) => t.payee)).toEqual([
+    "Employeur", // matched through its note
+    "Amazon Marketplace",
+  ]);
+  expect(amazon.count).toBe(2);
+  expect(amazon.sum).toBe(-500);
+
+  const carrefour = await call(
+    appRouter.transactions.list,
+    { search: "CARREFOUR" },
+    { context }
+  );
+  expect(carrefour.transactions).toHaveLength(1);
+});
+
+test("transactions.list search treats LIKE wildcards literally", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -1_000,
+      date: new Date("2026-03-01"),
+      payee: "Promo 100%",
+    },
+    { context }
+  );
+  // Would match a raw `%100%%` LIKE pattern if `%` were left as a wildcard.
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -1_000,
+      date: new Date("2026-03-02"),
+      payee: "Promo 1004",
+    },
+    { context }
+  );
+
+  const result = await call(
+    appRouter.transactions.list,
+    { search: "100%" },
+    { context }
+  );
+  expect(result.transactions.map((t) => t.payee)).toEqual(["Promo 100%"]);
+});
+
+test("transactions.list filters by period with inclusive bounds", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  for (const [date, payee] of [
+    ["2026-02-28", "Avant"],
+    ["2026-03-01", "Début"],
+    ["2026-03-15", "Fin"],
+    ["2026-04-01", "Après"],
+  ] as const) {
+    await call(
+      appRouter.transactions.create,
+      { accountId, amount: -1_000, date: new Date(date), payee },
+      { context }
+    );
+  }
+
+  const march = await call(
+    appRouter.transactions.list,
+    { from: new Date("2026-03-01"), to: new Date("2026-03-15") },
+    { context }
+  );
+  expect(march.transactions.map((t) => t.payee)).toEqual(["Fin", "Début"]);
+
+  const openEnded = await call(
+    appRouter.transactions.list,
+    { from: new Date("2026-03-15") },
+    { context }
+  );
+  expect(openEnded.transactions.map((t) => t.payee)).toEqual(["Après", "Fin"]);
+});
+
+test("transactions.list filters by category, combined with the account", async () => {
+  const context = createTestContext();
+  const checking = await makeAccount(context, "Compte courant");
+  const cash = await makeAccount(context, "Espèces", 0);
+  const courses = await makeCategory(context, "Courses");
+  const loisirs = await makeCategory(context, "Loisirs");
+
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId: checking,
+      amount: -2_000,
+      date: new Date("2026-03-01"),
+      payee: "Carrefour",
+      categoryId: courses,
+    },
+    { context }
+  );
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId: cash,
+      amount: -800,
+      date: new Date("2026-03-02"),
+      payee: "Marché",
+      categoryId: courses,
+    },
+    { context }
+  );
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId: checking,
+      amount: -1_500,
+      date: new Date("2026-03-03"),
+      payee: "Cinéma",
+      categoryId: loisirs,
+    },
+    { context }
+  );
+
+  const allCourses = await call(
+    appRouter.transactions.list,
+    { categoryId: courses },
+    { context }
+  );
+  expect(allCourses.transactions.map((t) => t.payee)).toEqual([
+    "Marché",
+    "Carrefour",
+  ]);
+
+  const checkingCourses = await call(
+    appRouter.transactions.list,
+    { categoryId: courses, accountId: checking },
+    { context }
+  );
+  expect(checkingCourses.transactions.map((t) => t.payee)).toEqual([
+    "Carrefour",
+  ]);
+});
+
+test("transactions.list categoryId null keeps only uncategorized rows, excluding transfer legs", async () => {
+  const context = createTestContext();
+  const checking = await makeAccount(context, "Compte courant");
+  const savings = await makeAccount(context, "Livret", 0);
+  const courses = await makeCategory(context, "Courses");
+
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId: checking,
+      amount: -2_000,
+      date: new Date("2026-03-01"),
+      payee: "Carrefour",
+      categoryId: courses,
+    },
+    { context }
+  );
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId: checking,
+      amount: -900,
+      date: new Date("2026-03-02"),
+      payee: "Mystère",
+    },
+    { context }
+  );
+  // A transfer's legs carry no category by design — they are not a filing todo.
+  createTransfer(context.db, {
+    fromAccountId: checking,
+    toAccountId: savings,
+    amount: 1_000,
+    date: new Date("2026-03-03"),
+  });
+
+  const uncategorized = await call(
+    appRouter.transactions.list,
+    { categoryId: null },
+    { context }
+  );
+  expect(uncategorized.transactions.map((t) => t.payee)).toEqual(["Mystère"]);
+  expect(uncategorized.count).toBe(1);
+});
+
+test("transactions.list filters by amount magnitude, regardless of sign", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  for (const [amount, payee] of [
+    [-2_500, "Petite dépense"],
+    [-10_000, "Grosse dépense"],
+    [5_000, "Revenu moyen"],
+  ] as const) {
+    await call(
+      appRouter.transactions.create,
+      { accountId, amount, date: new Date("2026-03-01"), payee },
+      { context }
+    );
+  }
+
+  const atLeast30 = await call(
+    appRouter.transactions.list,
+    { minAmount: 3_000 },
+    { context }
+  );
+  expect(new Set(atLeast30.transactions.map((t) => t.payee))).toEqual(
+    new Set(["Grosse dépense", "Revenu moyen"])
+  );
+
+  const between = await call(
+    appRouter.transactions.list,
+    { minAmount: 3_000, maxAmount: 6_000 },
+    { context }
+  );
+  expect(between.transactions.map((t) => t.payee)).toEqual(["Revenu moyen"]);
+});
+
+test("transactions.list count and sum aggregate the filtered rows", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -2_500,
+      date: new Date("2026-03-01"),
+      payee: "Amazon",
+    },
+    { context }
+  );
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -4_000,
+      date: new Date("2026-03-02"),
+      payee: "Amazon",
+    },
+    { context }
+  );
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: 250_000,
+      date: new Date("2026-03-05"),
+      payee: "Employeur",
+    },
+    { context }
+  );
+
+  // « Combien chez Amazon ? » — the aggregates answer directly.
+  const amazon = await call(
+    appRouter.transactions.list,
+    { search: "amazon" },
+    { context }
+  );
+  expect(amazon.count).toBe(2);
+  expect(amazon.sum).toBe(-6_500);
+
+  const everything = await call(appRouter.transactions.list, undefined, {
+    context,
+  });
+  expect(everything.count).toBe(3);
+  expect(everything.sum).toBe(243_500);
+
+  const nothing = await call(
+    appRouter.transactions.list,
+    { search: "introuvable" },
+    { context }
+  );
+  expect(nothing.transactions).toEqual([]);
+  expect(nothing.count).toBe(0);
+  expect(nothing.sum).toBe(0);
+});
+
+test("transactions.bulkCategorize files many transactions under a category at once", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const courses = await makeCategory(context, "Courses");
+
+  const ids: number[] = [];
+  for (const payee of ["Carrefour", "Auchan", "Marché"]) {
+    const tx = await call(
+      appRouter.transactions.create,
+      { accountId, amount: -1_000, date: new Date("2026-03-01"), payee },
+      { context }
+    );
+    ids.push(tx.id);
+  }
+
+  const result = await call(
+    appRouter.transactions.bulkCategorize,
+    { ids, categoryId: courses },
+    { context }
+  );
+  expect(result).toEqual({ updated: 3 });
+
+  const filed = await call(
+    appRouter.transactions.list,
+    { categoryId: courses },
+    { context }
+  );
+  expect(filed.count).toBe(3);
+  expect(filed.transactions.every((t) => t.categoryName === "Courses")).toBe(
+    true
+  );
+});
+
+test("transactions.bulkCategorize with null clears the category", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const courses = await makeCategory(context, "Courses");
+
+  const tx = await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -1_000,
+      date: new Date("2026-03-01"),
+      payee: "Carrefour",
+      categoryId: courses,
+    },
+    { context }
+  );
+
+  await call(
+    appRouter.transactions.bulkCategorize,
+    { ids: [tx.id], categoryId: null },
+    { context }
+  );
+
+  const uncategorized = await call(
+    appRouter.transactions.list,
+    { categoryId: null },
+    { context }
+  );
+  expect(uncategorized.transactions.map((t) => t.id)).toEqual([tx.id]);
+});
+
+test("transactions.bulkCategorize rejects an unknown category and unknown transactions", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const courses = await makeCategory(context, "Courses");
+
+  const tx = await call(
+    appRouter.transactions.create,
+    { accountId, amount: -1_000, date: new Date("2026-03-01") },
+    { context }
+  );
+
+  await expect(
+    call(
+      appRouter.transactions.bulkCategorize,
+      { ids: [tx.id], categoryId: 999 },
+      { context }
+    )
+  ).rejects.toThrow();
+
+  await expect(
+    call(
+      appRouter.transactions.bulkCategorize,
+      { ids: [tx.id, 999], categoryId: courses },
+      { context }
+    )
+  ).rejects.toThrow();
+
+  // The valid row was not silently recategorized by the failed calls.
+  const list = await call(appRouter.transactions.list, undefined, { context });
+  expect(list.transactions[0]?.categoryId).toBeNull();
+});
+
+test("transactions.bulkCategorize refuses transfer legs and changes nothing", async () => {
+  const context = createTestContext();
+  const from = await makeAccount(context, "Compte courant");
+  const to = await makeAccount(context, "Livret", 0);
+  const courses = await makeCategory(context, "Courses");
+
+  createTransfer(context.db, {
+    fromAccountId: from,
+    toAccountId: to,
+    amount: 3_000,
+    date: new Date("2026-03-01"),
+  });
+  const plain = await call(
+    appRouter.transactions.create,
+    { accountId: from, amount: -1_000, date: new Date("2026-03-02") },
+    { context }
+  );
+
+  const all = await call(appRouter.transactions.list, undefined, { context });
+  const leg = all.transactions.find((t) => t.transferId !== null);
+  if (!leg) throw new Error("Expected a transfer leg");
+
+  await expect(
+    call(
+      appRouter.transactions.bulkCategorize,
+      { ids: [plain.id, leg.id], categoryId: courses },
+      { context }
+    )
+  ).rejects.toThrow();
+
+  // Atomic: the plain transaction was not filed either.
+  const after = await call(appRouter.transactions.list, undefined, {
+    context,
+  });
+  expect(after.transactions.every((t) => t.categoryId === null)).toBe(true);
+});
+
 test("transactions.update and delete refuse to touch a transfer leg", async () => {
   const context = createTestContext();
   const from = await makeAccount(context, "Compte courant", 10_000);
@@ -365,9 +831,9 @@ test("transactions.update and delete refuse to touch a transfer leg", async () =
   });
 
   const legs = await call(appRouter.transactions.list, undefined, { context });
-  expect(legs).toHaveLength(2);
+  expect(legs.transactions).toHaveLength(2);
 
-  for (const leg of legs) {
+  for (const leg of legs.transactions) {
     await expect(
       call(
         appRouter.transactions.update,

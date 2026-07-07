@@ -153,6 +153,35 @@ export const strings = {
     filterLabel: 'Compte',
     noPayee: 'Sans libellé',
     noCategory: 'Sans catégorie',
+    filters: {
+      searchLabel: 'Recherche',
+      searchPlaceholder: 'Rechercher un libellé ou une note…',
+      categoryLabel: 'Catégorie',
+      allCategories: 'Toutes les catégories',
+      uncategorized: 'Non catégorisées',
+      fromLabel: 'Du',
+      toLabel: 'Au',
+      minAmountLabel: 'Montant min (€)',
+      maxAmountLabel: 'Montant max (€)',
+      minAmountPlaceholder: 'Min (€)',
+      maxAmountPlaceholder: 'Max (€)',
+      reset: 'Réinitialiser les filtres',
+      noMatch: 'Aucune transaction ne correspond aux filtres.',
+      noMatchHint: 'Élargissez la période ou effacez des filtres pour retrouver vos mouvements.'
+    },
+    selection: {
+      selectAll: 'Sélectionner toutes les transactions affichées',
+      selectOne: (label: string) => `Sélectionner « ${label} »`,
+      count: (n: number) => `${n} sélectionnée${n > 1 ? 's' : ''}`,
+      categoryPlaceholder: 'Choisir une catégorie',
+      apply: 'Recatégoriser',
+      clear: 'Annuler la sélection',
+      toast: {
+        done: (n: number) =>
+          `${n} transaction${n > 1 ? 's' : ''} recatégorisée${n > 1 ? 's' : ''}.`,
+        error: 'Impossible de recatégoriser les transactions.'
+      }
+    },
     // French labels for the two directions a manual amount can take.
     directions: {
       expense: 'Dépense',

@@ -21,12 +21,14 @@ export type CategoryGroupWithCategories = CategoriesOverview['groups'][number]
 export type Category = CategoryGroupWithCategories['categories'][number]
 
 /**
- * A transaction row as the renderer receives it from `transactions.list` — the
+ * What the renderer receives from `transactions.list` — the rows matching the
+ * filters plus their count and signed sum, aggregated in SQL. Each row is the
  * movement plus the display names (account, and category when filed) resolved on
- * the server. Inferred from the client contract so it can never drift from what
- * the procedure returns.
+ * the server. Inferred from the client contract so these types can never drift
+ * from what the procedure returns.
  */
-export type Transaction = Awaited<ReturnType<AppRouterClient['transactions']['list']>>[number]
+export type TransactionList = Awaited<ReturnType<AppRouterClient['transactions']['list']>>
+export type Transaction = TransactionList['transactions'][number]
 
 const { port1: clientPort, port2: serverPort } = new MessageChannel()
 
