@@ -7,6 +7,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
 import { setupBackups } from './backups'
+import { setupImports } from './imports'
 import { createSettingsStore } from './settings'
 
 const orpcHandler = new RPCHandler(appRouter, {
@@ -80,6 +81,11 @@ app.whenReady().then(() => {
   // backup on launch and registers the IPC surface the settings screen drives.
   const settings = createSettingsStore(join(app.getPath('userData'), 'settings.json'))
   setupBackups({ dbPath, db, settings })
+
+  // The native CSV picker: the main process reads the chosen file and hands
+  // its content (never a path) to the renderer, which drives the import
+  // procedures with it (see issue #8).
+  setupImports()
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

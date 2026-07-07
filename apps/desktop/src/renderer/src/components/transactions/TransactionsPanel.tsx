@@ -19,18 +19,20 @@ import {
   SelectValue
 } from '@repo/ui/components/select'
 import { Skeleton } from '@repo/ui/components/skeleton'
-import { ArrowLeftRightIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react'
+import { ArrowLeftRightIcon, FileUpIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react'
 
 import { formatDate } from '../../lib/datetime'
 import { formatEur } from '../../lib/money'
 import { type Transaction, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
 import { DeleteTransactionDialog } from './DeleteTransactionDialog'
+import { ImportCsvDialog } from './ImportCsvDialog'
 import { TransactionFormDialog } from './TransactionFormDialog'
 import { TransferFormDialog } from './TransferFormDialog'
 
 const t = strings.transactions
 const transferStrings = strings.transfers
+const importStrings = strings.imports
 
 /** Sentinel filter value meaning "every account, combined". */
 const ALL_ACCOUNTS = 'all'
@@ -46,6 +48,7 @@ export function TransactionsPanel(): React.JSX.Element {
   const [filter, setFilter] = useState<string>(ALL_ACCOUNTS)
   const [formOpen, setFormOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | undefined>(undefined)
   const [deleting, setDeleting] = useState<Transaction | undefined>(undefined)
 
@@ -109,6 +112,10 @@ export function TransactionsPanel(): React.JSX.Element {
                 ))}
               </SelectContent>
             </Select>
+            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUpIcon />
+              {importStrings.add}
+            </Button>
             {canTransfer && (
               <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)}>
                 <ArrowLeftRightIcon />
@@ -238,6 +245,12 @@ export function TransactionsPanel(): React.JSX.Element {
       <TransferFormDialog
         open={transferOpen}
         onOpenChange={setTransferOpen}
+        accounts={liveAccounts}
+        defaultAccountId={accountId}
+      />
+      <ImportCsvDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
         accounts={liveAccounts}
         defaultAccountId={accountId}
       />
