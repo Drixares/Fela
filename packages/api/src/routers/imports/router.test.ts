@@ -85,7 +85,7 @@ test("imports.commit writes every row to the account and memorises the mapping",
     { accountId },
     { context }
   );
-  expect(transactions.map((t) => [t.payee, t.amount])).toEqual([
+  expect(transactions.transactions.map((t) => [t.payee, t.amount])).toEqual([
     ["BOULANGERIE PAUL", -890], // most recent first
     ["VIREMENT EMPLOYEUR", 120_000],
     ["CARREFOUR", -2_550],

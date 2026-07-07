@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@repo/ui/components/badge'
 import { Button } from '@repo/ui/components/button'
 import { Card } from '@repo/ui/components/card'
@@ -21,16 +19,18 @@ import {
   SelectValue
 } from '@repo/ui/components/select'
 import { Skeleton } from '@repo/ui/components/skeleton'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 
 import { toast } from '@repo/ui/components/sonner'
 import {
   ArrowLeftRightIcon,
+  FileUpIcon,
   FilterXIcon,
   PencilIcon,
   PlusIcon,
   SearchIcon,
-  Trash2Icon,
-  FileUpIcon
+  Trash2Icon
 } from 'lucide-react'
 
 import { formatDate, fromDateInputValue, fromDateInputValueEndOfDay } from '../../lib/datetime'
@@ -256,23 +256,6 @@ export function TransactionsPanel(): React.JSX.Element {
         </div>
         {hasAccounts && (
           <div className="flex items-center gap-2">
-            <Select
-              items={filterItems}
-              value={filter}
-              onValueChange={(value) => setFilter(value ?? ALL_ACCOUNTS)}
-            >
-              <SelectTrigger size="sm" aria-label={t.filterLabel}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_ACCOUNTS}>{t.allAccounts}</SelectItem>
-                {liveAccounts.map((account) => (
-                  <SelectItem key={account.id} value={String(account.id)}>
-                    {account.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
               <FileUpIcon />
               {importStrings.add}
