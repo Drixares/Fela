@@ -29,6 +29,11 @@
       "electron",
       "esbuild",
       "better-sqlite3"
-    ]
+    ],
+    "//overrides": "Force one @types/react across the workspace. The renderer consumes @repo/ui as source, so its typecheck compiles the UI .tsx files; two @types/react copies make tsc report 'two different types with this name exist'.",
+    "overrides": {
+      "@types/react": "19.2.17",
+      "@types/react-dom": "19.2.3"
+    }
   }
 }

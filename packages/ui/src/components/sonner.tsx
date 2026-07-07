@@ -42,4 +42,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
   );
 };
 
+// Re-exported so consumers fire toasts through the design system rather than
+// depending on `sonner` directly.
+export { toast } from "sonner";
+
 export { Toaster };

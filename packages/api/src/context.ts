@@ -1,3 +1,4 @@
+import { os } from "@orpc/server";
 import type { Db } from "@repo/db";
 
 /**
@@ -9,3 +10,5 @@ import type { Db } from "@repo/db";
 export interface ServerContext {
   db: Db;
 }
+
+export const base = os.$context<ServerContext>();

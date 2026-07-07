@@ -3,6 +3,13 @@ import { RPCLink } from '@orpc/client/message-port'
 import { createTanstackQueryUtils } from '@orpc/tanstack-query'
 import type { AppRouterClient } from '@repo/api/client'
 
+/**
+ * An account row as the renderer receives it — the account plus its derived
+ * balance. Inferred from the client contract so it can never drift from what
+ * the `accounts.list` procedure actually returns.
+ */
+export type Account = Awaited<ReturnType<AppRouterClient['accounts']['list']>>[number]
+
 const { port1: clientPort, port2: serverPort } = new MessageChannel()
 
 window.postMessage('start-orpc-client', '*', [serverPort])
