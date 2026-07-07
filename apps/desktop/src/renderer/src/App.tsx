@@ -1,4 +1,5 @@
 import { AccountsPanel } from './components/accounts/AccountsPanel'
+import { CategoriesPanel } from './components/categories/CategoriesPanel'
 import Versions from './components/Versions'
 import { strings } from './lib/strings'
 
@@ -11,6 +12,8 @@ function App(): React.JSX.Element {
       </header>
 
       <AccountsPanel />
+
+      <CategoriesPanel />
 
       <Versions />
     </main>
