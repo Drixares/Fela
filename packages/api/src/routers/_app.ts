@@ -1,7 +1,10 @@
 import { implement } from "@orpc/server";
 import type { ServerContext } from "../context.js";
 import { accountsRouter } from "./accounts/router.js";
+import { categoriesRouter } from "./categories/router.js";
 import { testRouter } from "./test/router.js";
+import { transactionsRouter } from "./transactions/router.js";
+import { transfersRouter } from "./transfers/router.js";
 
 /**
  * API contract: composed domain routers (each built with `base.router` / no lazy roots).
@@ -14,6 +17,9 @@ import { testRouter } from "./test/router.js";
 const appContract = {
   test: testRouter,
   accounts: accountsRouter,
+  categories: categoriesRouter,
+  transactions: transactionsRouter,
+  transfers: transfersRouter,
 };
 
 export const appRouter = implement(appContract)

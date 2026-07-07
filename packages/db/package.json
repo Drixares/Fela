@@ -12,7 +12,9 @@
     "db:push": "node drizzle.mjs push",
     "db:studio": "node drizzle.mjs studio",
     "lint": "eslint . --max-warnings 0",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "node vitest.mjs run",
+    "test:watch": "node vitest.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
@@ -23,6 +25,8 @@
     "@repo/typescript-config": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "drizzle-kit": "^0.31.10",
-    "typescript": "5.9.2"
+    "electron": "43.0.0",
+    "typescript": "5.9.2",
+    "vitest": "^3.2.4"
   }
 }

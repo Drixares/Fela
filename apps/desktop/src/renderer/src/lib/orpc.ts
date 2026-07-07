@@ -10,6 +10,24 @@ import type { AppRouterClient } from '@repo/api/client'
  */
 export type Account = Awaited<ReturnType<AppRouterClient['accounts']['list']>>[number]
 
+/**
+ * The category tree the renderer receives from `categories.overview` — every
+ * group with its leaf categories nested, plus the categories that belong to no
+ * group. Inferred from the client contract so these types can never drift from
+ * what the procedure returns.
+ */
+export type CategoriesOverview = Awaited<ReturnType<AppRouterClient['categories']['overview']>>
+export type CategoryGroupWithCategories = CategoriesOverview['groups'][number]
+export type Category = CategoryGroupWithCategories['categories'][number]
+
+/**
+ * A transaction row as the renderer receives it from `transactions.list` — the
+ * movement plus the display names (account, and category when filed) resolved on
+ * the server. Inferred from the client contract so it can never drift from what
+ * the procedure returns.
+ */
+export type Transaction = Awaited<ReturnType<AppRouterClient['transactions']['list']>>[number]
+
 const { port1: clientPort, port2: serverPort } = new MessageChannel()
 
 window.postMessage('start-orpc-client', '*', [serverPort])

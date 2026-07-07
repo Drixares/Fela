@@ -2,10 +2,12 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import { onError } from '@orpc/server'
 import { RPCHandler } from '@orpc/server/message-port'
 import { appRouter } from '@repo/api'
-import { createDb } from '@repo/db'
+import { createDb, seedDefaultCategories } from '@repo/db'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
+import { setupBackups } from './backups'
+import { createSettingsStore } from './settings'
 
 const orpcHandler = new RPCHandler(appRouter, {
   interceptors: [onError((error) => console.error(error))]
@@ -62,6 +64,22 @@ app.whenReady().then(() => {
     : join(app.getPath('userData'), 'app.db')
 
   const db = createDb(dbPath)
+
+  // First-launch only: fill a brand-new database with the French default
+  // categories. Idempotent — an existing database (even one the user has edited)
+  // is never re-seeded. Wrapped so a seed hiccup can never block startup.
+  try {
+    seedDefaultCategories(db)
+  } catch (error) {
+    console.error('Failed to seed default categories', error)
+  }
+
+  // Rotating file backups + restore, owned entirely by the main process (the
+  // sole owner of the database file). Settings live in their own JSON file so a
+  // restore never rewinds where future backups are written. Takes a throttled
+  // backup on launch and registers the IPC surface the settings screen drives.
+  const settings = createSettingsStore(join(app.getPath('userData'), 'settings.json'))
+  setupBackups({ dbPath, db, settings })
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

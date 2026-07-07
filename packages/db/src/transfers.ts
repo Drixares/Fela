@@ -79,15 +79,20 @@ export interface Transfer {
 }
 
 /**
- * Reassemble a transfer from its two legs into a single object (source,
- * destination, amount) — the inverse of {@link createTransfer}. Useful for
- * display and for editing or deleting a transfer as one unit.
- *
- * @returns the transfer, or `null` if no legs exist for the id.
- * @throws if the legs are malformed (not exactly one negative and one
- *   positive row), which would indicate corrupted data.
+ * Anything that can read transaction rows — the top-level {@link Db} or a
+ * transaction handle passed to `db.transaction(...)`. Lets the transfer helpers
+ * reassemble legs both outside and inside a SQL transaction.
  */
-export function getTransfer(db: Db, transferId: string): Transfer | null {
+type Reader = Pick<Db, "select">;
+
+/**
+ * Reassemble a transfer's two legs into a single object (source, destination,
+ * amount), or `null` if none exist for the id.
+ *
+ * @throws if the legs are malformed (not exactly one negative and one positive
+ *   row), which would indicate corrupted data.
+ */
+function readTransfer(db: Reader, transferId: string): Transfer | null {
   const legs = db
     .select()
     .from(transactions)
@@ -117,4 +122,96 @@ export function getTransfer(db: Db, transferId: string): Transfer | null {
     note: from.note,
     legs: [from, to],
   };
+}
+
+/**
+ * Reassemble a transfer from its two legs into a single object (source,
+ * destination, amount) — the inverse of {@link createTransfer}. Useful for
+ * display and for editing or deleting a transfer as one unit.
+ *
+ * @returns the transfer, or `null` if no legs exist for the id.
+ * @throws if the legs are malformed (not exactly one negative and one
+ *   positive row), which would indicate corrupted data.
+ */
+export function getTransfer(db: Db, transferId: string): Transfer | null {
+  return readTransfer(db, transferId);
+}
+
+/** A partial edit of a transfer; only the fields supplied are changed. */
+export interface UpdateTransferInput {
+  fromAccountId?: number;
+  toAccountId?: number;
+  /** New amount, in minor units (cents). Must be strictly positive. */
+  amount?: number;
+  date?: Date;
+  payee?: string | null;
+  note?: string | null;
+}
+
+/**
+ * Edit an existing transfer as one unit, keeping its two legs coherent. Only the
+ * fields present in `patch` change; the rest keep their current values. The
+ * negative (source) and positive (destination) legs are rewritten together
+ * inside a single SQL transaction, so an edit that fails its invariants leaves
+ * the transfer exactly as it was — never a half-updated or orphaned leg.
+ *
+ * @returns the updated transfer, or `null` if no transfer has that id.
+ * @throws if the resulting amount is not positive or the two accounts coincide.
+ */
+export function updateTransfer(
+  db: Db,
+  transferId: string,
+  patch: UpdateTransferInput
+): Transfer | null {
+  return db.transaction((tx) => {
+    const current = readTransfer(tx, transferId);
+    if (!current) {
+      return null;
+    }
+
+    const fromAccountId = patch.fromAccountId ?? current.fromAccountId;
+    const toAccountId = patch.toAccountId ?? current.toAccountId;
+    const amount = patch.amount ?? current.amount;
+    const date = patch.date ?? current.date;
+    const payee = patch.payee !== undefined ? patch.payee : current.payee;
+    const note = patch.note !== undefined ? patch.note : current.note;
+
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw new Error(
+        "Transfer amount must be a positive integer (minor units)"
+      );
+    }
+    if (fromAccountId === toAccountId) {
+      throw new Error("Cannot transfer to the same account");
+    }
+
+    const [source, dest] = current.legs;
+    tx.update(transactions)
+      .set({ accountId: fromAccountId, amount: -amount, date, payee, note })
+      .where(eq(transactions.id, source.id))
+      .run();
+    tx.update(transactions)
+      .set({ accountId: toAccountId, amount, date, payee, note })
+      .where(eq(transactions.id, dest.id))
+      .run();
+
+    return readTransfer(tx, transferId);
+  });
+}
+
+/**
+ * Delete a transfer as one unit: both legs vanish together inside a single SQL
+ * transaction, so the operation can never leave one leg orphaned.
+ *
+ * @returns `true` if a transfer was deleted, `false` if none had that id.
+ */
+export function deleteTransfer(db: Db, transferId: string): boolean {
+  return db.transaction((tx) => {
+    const deleted = tx
+      .delete(transactions)
+      .where(eq(transactions.transferId, transferId))
+      .returning()
+      .all();
+    return deleted.length > 0;
+  });
 }
