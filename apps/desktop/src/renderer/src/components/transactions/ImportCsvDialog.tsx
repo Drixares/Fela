@@ -36,12 +36,9 @@ type ChosenCsvFile = NonNullable<Awaited<ReturnType<typeof window.api.imports.ch
 /** What `imports.preview` returns — inferred so it can never drift. */
 type ImportPreview = Awaited<ReturnType<typeof client.imports.preview>>
 
-/** Column mapping as the import procedures take it (0-based indexes). */
-interface ColumnMapping {
-  dateColumn: number
-  amountColumn: number
-  labelColumn: number
-}
+/** Column mapping as the import procedures take it — inferred from the
+ * client contract so it can never drift from the server's schema. */
+type ColumnMapping = NonNullable<Parameters<typeof client.imports.preview>[0]['mapping']>
 
 /** The flow's screens: pick file+account → map columns (first import) → preview. */
 type Step = 'setup' | 'mapping' | 'preview'
@@ -203,7 +200,13 @@ function ImportFlow({
   return (
     <div className="flex flex-col gap-6">
       <DialogHeader>
-        <DialogTitle>{step === 'mapping' ? t.mapping.title : t.dialog.title}</DialogTitle>
+        <DialogTitle>
+          {step === 'mapping'
+            ? t.mapping.title
+            : step === 'preview'
+              ? t.preview.title
+              : t.dialog.title}
+        </DialogTitle>
         <DialogDescription>
           {step === 'mapping' ? t.mapping.description : t.dialog.description}
         </DialogDescription>

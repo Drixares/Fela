@@ -241,8 +241,7 @@ export const strings = {
     },
     toast: {
       imported: (added: number) =>
-        `${added} transaction${added > 1 ? 's' : ''} importée${added > 1 ? 's' : ''}.`,
-      importError: 'Impossible d’importer le fichier.'
+        `${added} transaction${added > 1 ? 's' : ''} importée${added > 1 ? 's' : ''}.`
     }
   },
   transfers: {

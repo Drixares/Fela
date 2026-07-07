@@ -221,6 +221,34 @@ test("two identical rows in one file both import, and a re-import skips both", a
   expect(second).toEqual({ imported: 0, duplicates: 2 });
 });
 
+test("a zero-amount row is skipped as noise instead of refusing the file", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  // A waived fee shows up as 0,00 in some exports; it is no movement at all,
+  // so it must neither import nor take the rest of the file down with it.
+  const withZero = [
+    "Date;Montant;Libellé",
+    "01/03/2026;0,00;FRAIS OFFERTS",
+    "02/03/2026;-5,00;CARREFOUR",
+  ].join("\n");
+
+  const preview = await call(
+    appRouter.imports.preview,
+    { accountId, content: withZero, mapping: BANK_MAPPING },
+    { context }
+  );
+  expect(preview.newCount).toBe(1);
+  expect(preview.rows.map((row) => row.label)).toEqual(["CARREFOUR"]);
+
+  const result = await call(
+    appRouter.imports.commit,
+    { accountId, content: withZero, mapping: BANK_MAPPING },
+    { context }
+  );
+  expect(result).toEqual({ imported: 1, duplicates: 0 });
+});
+
 test("an invalid import is refused with a clear error and writes nothing", async () => {
   const context = createTestContext();
   const accountId = await makeAccount(context);
@@ -248,7 +276,7 @@ test("an invalid import is refused with a clear error and writes nothing", async
       { accountId, content: "juste du bruit", mapping: BANK_MAPPING },
       { context }
     )
-  ).rejects.toThrow(/header/i);
+  ).rejects.toThrow(/en-tête/);
 
   // An unparsable amount.
   const badAmount = ["Date;Montant;Libellé", "01/03/2026;abc;CARREFOUR"].join(
@@ -260,7 +288,7 @@ test("an invalid import is refused with a clear error and writes nothing", async
       { accountId, content: badAmount, mapping: BANK_MAPPING },
       { context }
     )
-  ).rejects.toThrow(/amount/i);
+  ).rejects.toThrow(/montant/i);
 
   // An incoherent mapping — points beyond the file's columns.
   await expect(
@@ -361,5 +389,5 @@ test("imports.inspect returns the headers and sample rows the mapping screen nee
   // An unreadable file is refused here too, before any mapping is attempted.
   await expect(
     call(appRouter.imports.inspect, { content: "" }, { context })
-  ).rejects.toThrow(/header/i);
+  ).rejects.toThrow(/en-tête/);
 });

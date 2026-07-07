@@ -9,7 +9,13 @@
  * BAD_REQUEST and nothing is written.
  */
 
-/** A CSV import refusal — unreadable file, incoherent mapping or bad value. */
+/**
+ * A CSV import refusal — unreadable file, incoherent mapping or bad value.
+ *
+ * Unlike other server errors in this codebase, these messages are written in
+ * French: the import dialog shows them verbatim so the user knows exactly
+ * which line and value were refused — they are product copy, not diagnostics.
+ */
 export class CsvImportError extends Error {}
 
 /** Which column (0-based) holds each of the three values an import needs. */
@@ -162,7 +168,9 @@ export function parseCsv(content: string): ParsedCsv {
     i += 1;
   }
   if (inQuotes) {
-    throw new CsvImportError("Unreadable CSV: a quoted field never closes");
+    throw new CsvImportError(
+      "Fichier illisible : un champ entre guillemets n'est jamais refermé"
+    );
   }
   if (field !== "" || record.length > 0) {
     endRecord();
@@ -171,7 +179,7 @@ export function parseCsv(content: string): ParsedCsv {
   const [headers, ...rows] = records;
   if (!headers || rows.length === 0) {
     throw new CsvImportError(
-      "Unreadable CSV: expected a header line followed by at least one data row"
+      "Fichier illisible : il faut une ligne d'en-tête puis au moins une ligne de données"
     );
   }
   return { headers: headers.map((h) => h.trim()), rows };
@@ -198,7 +206,7 @@ function parseDateCell(value: string, line: number): Date {
     day = Number(iso[3]);
   } else {
     throw new CsvImportError(
-      `Line ${line}: cannot parse "${cell}" as a date (expected dd/mm/yyyy or yyyy-mm-dd)`
+      `Ligne ${line} : impossible de lire « ${cell} » comme une date (jj/mm/aaaa ou aaaa-mm-jj attendu)`
     );
   }
 
@@ -209,7 +217,7 @@ function parseDateCell(value: string, line: number): Date {
     date.getUTCDate() === day;
   if (!roundTrips) {
     throw new CsvImportError(
-      `Line ${line}: "${cell}" is not a valid calendar date`
+      `Ligne ${line} : « ${cell} » n'est pas une date du calendrier`
     );
   }
   return date;
@@ -219,14 +227,15 @@ function parseDateCell(value: string, line: number): Date {
  * Parse an amount cell into signed minor units (cents). Accepts French
  * (`-1 234,56`) and anglo (`-1,234.56` / `-1234.56`) notations, a `€` suffix,
  * and any space flavour as thousands separator. When both `.` and `,` appear,
- * the rightmost is the decimal separator.
+ * the rightmost is the decimal separator. May return 0 \u2014 the caller decides
+ * what a zero movement means.
  */
 function parseAmountCell(value: string, line: number): number {
   // \s already covers no-break and narrow no-break spaces (French thousands).
   let cell = value.trim().replace(/[\s\u20ac]/gu, "");
   const refuse = (): never => {
     throw new CsvImportError(
-      `Line ${line}: cannot parse "${value.trim()}" as an amount`
+      `Ligne ${line} : impossible de lire \u00ab ${value.trim()} \u00bb comme un montant`
     );
   };
   if (cell === "") refuse();
@@ -250,11 +259,6 @@ function parseAmountCell(value: string, line: number): number {
   if (!/^[+-]?\d+(\.\d{1,2})?$/.test(cell)) refuse();
   const cents = Math.round(Number(cell) * 100);
   if (!Number.isSafeInteger(cents)) refuse();
-  if (cents === 0) {
-    throw new CsvImportError(
-      `Line ${line}: a zero amount cannot be imported as a movement`
-    );
-  }
   return cents;
 }
 
@@ -268,7 +272,7 @@ function cellAt(
   const cell = row[column];
   if (cell === undefined) {
     throw new CsvImportError(
-      `Line ${line}: no ${what} in column ${column + 1} — the row has only ${row.length} column(s); check the column mapping`
+      `Ligne ${line} : pas de ${what} en colonne ${column + 1} — la ligne n'a que ${row.length} colonne(s) ; vérifiez le mapping`
     );
   }
   return cell;
@@ -278,7 +282,8 @@ function cellAt(
  * Apply the column mapping to every parsed data row, coercing each value.
  * Refuses a mapping that points outside the header row or maps two values to
  * the same column, and any row whose date, amount or label cannot be read —
- * one bad row refuses the whole file, keeping imports all-or-nothing.
+ * one bad row refuses the whole file, keeping imports all-or-nothing. The one
+ * exception: a row whose amount is exactly zero is dropped as noise.
  */
 export function mapRows(
   parsed: ParsedCsv,
@@ -288,27 +293,33 @@ export function mapRows(
   const columns = [dateColumn, amountColumn, labelColumn];
   if (new Set(columns).size !== columns.length) {
     throw new CsvImportError(
-      "Incoherent mapping: two values are mapped to the same column"
+      "Mapping incohérent : deux valeurs pointent vers la même colonne"
     );
   }
   if (columns.some((c) => c >= parsed.headers.length)) {
     throw new CsvImportError(
-      `Incoherent mapping: the file has ${parsed.headers.length} column(s), but the mapping points beyond them`
+      `Mapping incohérent : le fichier a ${parsed.headers.length} colonne(s), mais le mapping pointe au-delà`
     );
   }
 
-  return parsed.rows.map((row, index) => {
+  const rows: ImportRow[] = [];
+  parsed.rows.forEach((row, index) => {
     // Line 1 is the header, so data row N sits on CSV line N + 1.
     const line = index + 2;
-    const label = cellAt(row, labelColumn, "label", line).trim();
+    const label = cellAt(row, labelColumn, "libellé", line).trim();
     if (label === "") {
-      throw new CsvImportError(`Line ${line}: the label column is empty`);
+      throw new CsvImportError(`Ligne ${line} : la colonne libellé est vide`);
     }
-    return {
-      line,
-      date: parseDateCell(cellAt(row, dateColumn, "date", line), line),
-      amount: parseAmountCell(cellAt(row, amountColumn, "amount", line), line),
-      label,
-    };
+    const date = parseDateCell(cellAt(row, dateColumn, "date", line), line);
+    const amount = parseAmountCell(
+      cellAt(row, amountColumn, "montant", line),
+      line
+    );
+    // A zero amount is no movement at all (a waived fee, a cancelled line):
+    // it is skipped as noise rather than refusing an otherwise valid file.
+    if (amount !== 0) {
+      rows.push({ line, date, amount, label });
+    }
   });
+  return rows;
 }

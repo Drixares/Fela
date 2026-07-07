@@ -35,21 +35,26 @@ function assertAccountExists(db: Db, id: number): void {
 }
 
 /**
- * Parse + map the file, converting any refusal into a BAD_REQUEST whose
- * message tells the user which line or value was rejected.
+ * Run a CSV computation, converting any {@link CsvImportError} into a
+ * BAD_REQUEST whose message tells the user which line or value was refused.
  */
-function readRows(
-  content: string,
-  mapping: z.infer<typeof mappingSchema>
-): ImportRow[] {
+function refusing<T>(compute: () => T): T {
   try {
-    return mapRows(parseCsv(content), mapping);
+    return compute();
   } catch (error) {
     if (error instanceof CsvImportError) {
       throw new ORPCError("BAD_REQUEST", { message: error.message });
     }
     throw error;
   }
+}
+
+/** Parse + map the file, surfacing refusals as BAD_REQUEST. */
+function readRows(
+  content: string,
+  mapping: z.infer<typeof mappingSchema>
+): ImportRow[] {
+  return refusing(() => mapRows(parseCsv(content), mapping));
 }
 
 /**
@@ -88,8 +93,9 @@ function resolveMapping(
 ): z.infer<typeof mappingSchema> {
   const mapping = provided ?? storedMapping(db, accountId);
   if (!mapping) {
+    // French, like the CsvImportError messages: shown verbatim to the user.
     throw new ORPCError("BAD_REQUEST", {
-      message: `No column mapping sent and none memorised for account ${accountId} — map the columns first`,
+      message: `Aucun mapping de colonnes fourni ni mémorisé pour le compte ${accountId} — associez d'abord les colonnes`,
     });
   }
   return mapping;
@@ -120,14 +126,14 @@ function flagAgainstStored(
   return flagDuplicates(accountId, rows, counts);
 }
 
+/** How many data rows `inspect` returns for the mapping screen's preview. */
+const SAMPLE_ROWS = 5;
+
 /**
  * CSV import procedures (see the V1 PRD, #1, and issue #8). The main process
  * reads the chosen file and passes its **content as a string** — never a path.
  * `preview` is pure computation; only `commit` writes, in one SQL transaction.
  */
-/** How many data rows `inspect` returns for the mapping screen's preview. */
-const SAMPLE_ROWS = 5;
-
 export const importsRouter = base.router({
   /**
    * Split a file into headers and a few sample rows — what the renderer needs
@@ -137,18 +143,11 @@ export const importsRouter = base.router({
   inspect: base
     .input(z.object({ content: z.string() }))
     .handler(async ({ input }) => {
-      try {
-        const parsed = parseCsv(input.content);
-        return {
-          headers: parsed.headers,
-          sampleRows: parsed.rows.slice(0, SAMPLE_ROWS),
-        };
-      } catch (error) {
-        if (error instanceof CsvImportError) {
-          throw new ORPCError("BAD_REQUEST", { message: error.message });
-        }
-        throw error;
-      }
+      const parsed = refusing(() => parseCsv(input.content));
+      return {
+        headers: parsed.headers,
+        sampleRows: parsed.rows.slice(0, SAMPLE_ROWS),
+      };
     }),
 
   /**
