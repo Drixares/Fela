@@ -1,15 +1,19 @@
 import { electronAPI } from '@electron-toolkit/preload'
 import { contextBridge, ipcRenderer } from 'electron'
-import { BACKUP_CHANNELS, type FelaApi } from '../shared/ipc'
+import { BACKUP_CHANNELS, IMPORT_CHANNELS, type FelaApi } from '../shared/ipc'
 
-// The renderer never touches the database file; it drives backups through this
-// thin bridge to the main-process handlers (see src/main/backups.ts).
+// The renderer never touches the filesystem; it drives backups and file
+// picking through this thin bridge to the main-process handlers (see
+// src/main/backups.ts and src/main/imports.ts).
 const api: FelaApi = {
   backups: {
     getState: () => ipcRenderer.invoke(BACKUP_CHANNELS.getState),
     chooseDirectory: () => ipcRenderer.invoke(BACKUP_CHANNELS.chooseDirectory),
     createNow: () => ipcRenderer.invoke(BACKUP_CHANNELS.createNow),
     restore: (backupPath) => ipcRenderer.invoke(BACKUP_CHANNELS.restore, backupPath)
+  },
+  imports: {
+    chooseCsvFile: () => ipcRenderer.invoke(IMPORT_CHANNELS.chooseCsvFile)
   }
 }
 

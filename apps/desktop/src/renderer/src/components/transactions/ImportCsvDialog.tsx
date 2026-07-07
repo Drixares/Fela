@@ -1,0 +1,380 @@
+import { useState } from 'react'
+import { Alert, AlertDescription } from '@repo/ui/components/alert'
+import { Badge } from '@repo/ui/components/badge'
+import { Button } from '@repo/ui/components/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@repo/ui/components/dialog'
+import { Label } from '@repo/ui/components/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@repo/ui/components/select'
+import { toast } from '@repo/ui/components/sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { FileUpIcon } from 'lucide-react'
+
+import { formatDate } from '../../lib/datetime'
+import { formatEur } from '../../lib/money'
+import { type Account, client, orpc } from '../../lib/orpc'
+import { strings } from '../../lib/strings'
+
+const t = strings.imports
+
+/** The file as the main process hands it over: name + decoded content. */
+type ChosenCsvFile = NonNullable<Awaited<ReturnType<typeof window.api.imports.chooseCsvFile>>>
+
+/** What `imports.preview` returns — inferred so it can never drift. */
+type ImportPreview = Awaited<ReturnType<typeof client.imports.preview>>
+
+/** Column mapping as the import procedures take it (0-based indexes). */
+interface ColumnMapping {
+  dateColumn: number
+  amountColumn: number
+  labelColumn: number
+}
+
+/** The flow's screens: pick file+account → map columns (first import) → preview. */
+type Step = 'setup' | 'mapping' | 'preview'
+
+interface ImportCsvDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** Accounts offered as import target (the live, non-archived ones). */
+  accounts: Account[]
+  /** Pre-selected target (e.g. the account the list is filtered to). */
+  defaultAccountId?: number
+}
+
+/**
+ * The CSV import flow (see issue #8). The main process reads the chosen file
+ * and hands its content over as a string; every computation then goes through
+ * the `imports.*` procedures — `inspect` to offer the column mapping on a
+ * first import, `preview` to announce what a commit would do, and `commit` to
+ * write everything in one SQL transaction. The renderer only displays.
+ *
+ * The stateful flow lives in {@link ImportFlow}, a child Base UI unmounts when
+ * the dialog closes and remounts on the next open — so each open starts from a
+ * fresh first step with no stale file or preview to reset.
+ */
+export function ImportCsvDialog(props: ImportCsvDialogProps): React.JSX.Element {
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent>
+        <ImportFlow {...props} onDone={() => props.onOpenChange(false)} />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Guess which column holds a value from its header, e.g. "Date" → date. */
+function guessColumn(headers: string[], pattern: RegExp): string {
+  const index = headers.findIndex((header) => pattern.test(header))
+  return index === -1 ? '' : String(index)
+}
+
+/** The user-facing reason an import was refused, out of the procedure error. */
+function refusalMessage(error: unknown): string {
+  return t.dialog.refused(error instanceof Error ? error.message : String(error))
+}
+
+function ImportFlow({
+  accounts,
+  defaultAccountId,
+  onDone
+}: ImportCsvDialogProps & { onDone: () => void }): React.JSX.Element {
+  const queryClient = useQueryClient()
+
+  const [step, setStep] = useState<Step>('setup')
+  const [accountValue, setAccountValue] = useState(
+    String(defaultAccountId ?? accounts[0]?.id ?? '')
+  )
+  const [file, setFile] = useState<ChosenCsvFile | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Mapping step state — filled by `inspect` when the account has no memorised
+  // mapping yet. The three selects carry column indexes as strings.
+  const [headers, setHeaders] = useState<string[]>([])
+  const [sampleRows, setSampleRows] = useState<string[][]>([])
+  const [dateValue, setDateValue] = useState('')
+  const [amountValue, setAmountValue] = useState('')
+  const [labelValue, setLabelValue] = useState('')
+
+  // The mapping this import runs with: undefined means "use the memorised
+  // one" — the procedures resolve it server-side.
+  const [mapping, setMapping] = useState<ColumnMapping | undefined>(undefined)
+  const [preview, setPreview] = useState<ImportPreview | null>(null)
+
+  const accountId = Number(accountValue)
+  const accountItems: Record<string, string> = Object.fromEntries(
+    accounts.map((a) => [String(a.id), a.name])
+  )
+  const columnItems: Record<string, string> = Object.fromEntries(
+    headers.map((header, index) => [String(index), header])
+  )
+
+  async function chooseFile(): Promise<void> {
+    const chosen = await window.api.imports.chooseCsvFile()
+    if (chosen) {
+      setFile(chosen)
+      setError(null)
+    }
+  }
+
+  /** Run a flow step, funnelling any refusal into the dialog's error slot. */
+  async function run(action: () => Promise<void>): Promise<void> {
+    setBusy(true)
+    setError(null)
+    try {
+      await action()
+    } catch (cause) {
+      setError(refusalMessage(cause))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** From setup: straight to preview when a mapping is memorised, else map. */
+  function continueFromSetup(): void {
+    if (!file) return
+    void run(async () => {
+      const stored = await client.imports.getMapping({ accountId })
+      if (stored) {
+        setMapping(undefined)
+        setPreview(await client.imports.preview({ accountId, content: file.content }))
+        setStep('preview')
+        return
+      }
+      const inspected = await client.imports.inspect({ content: file.content })
+      setHeaders(inspected.headers)
+      setSampleRows(inspected.sampleRows)
+      setDateValue(guessColumn(inspected.headers, /date/i))
+      setAmountValue(guessColumn(inspected.headers, /montant|amount|d[ée]bit/i))
+      setLabelValue(guessColumn(inspected.headers, /libell|label|description|d[ée]signation/i))
+      setStep('mapping')
+    })
+  }
+
+  function previewFromMapping(): void {
+    if (!file) return
+    if (dateValue === '' || amountValue === '' || labelValue === '') {
+      setError(t.mapping.required)
+      return
+    }
+    const chosen: ColumnMapping = {
+      dateColumn: Number(dateValue),
+      amountColumn: Number(amountValue),
+      labelColumn: Number(labelValue)
+    }
+    if (new Set([chosen.dateColumn, chosen.amountColumn, chosen.labelColumn]).size !== 3) {
+      setError(t.mapping.distinct)
+      return
+    }
+    void run(async () => {
+      setPreview(
+        await client.imports.preview({ accountId, content: file.content, mapping: chosen })
+      )
+      setMapping(chosen)
+      setStep('preview')
+    })
+  }
+
+  function commit(): void {
+    if (!file) return
+    void run(async () => {
+      const result = await client.imports.commit({ accountId, content: file.content, mapping })
+      void queryClient.invalidateQueries({ queryKey: orpc.transactions.key() })
+      void queryClient.invalidateQueries({ queryKey: orpc.accounts.key() })
+      toast.success(t.toast.imported(result.imported))
+      onDone()
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <DialogHeader>
+        <DialogTitle>{step === 'mapping' ? t.mapping.title : t.dialog.title}</DialogTitle>
+        <DialogDescription>
+          {step === 'mapping' ? t.mapping.description : t.dialog.description}
+        </DialogDescription>
+      </DialogHeader>
+
+      {step === 'setup' && (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="import-account">{t.dialog.accountLabel}</Label>
+            <Select
+              items={accountItems}
+              value={accountValue || null}
+              onValueChange={(value) => setAccountValue(value ?? '')}
+            >
+              <SelectTrigger id="import-account" className="w-full">
+                <SelectValue placeholder={t.dialog.accountPlaceholder} />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={String(account.id)}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button type="button" variant="outline" onClick={() => void chooseFile()}>
+              <FileUpIcon />
+              {t.dialog.chooseFile}
+            </Button>
+            <span className="truncate text-sm text-muted-foreground">
+              {file ? file.name : t.dialog.noFile}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {step === 'mapping' && (
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-3">
+            {(
+              [
+                ['import-date', t.mapping.dateLabel, dateValue, setDateValue],
+                ['import-amount', t.mapping.amountLabel, amountValue, setAmountValue],
+                ['import-label', t.mapping.labelLabel, labelValue, setLabelValue]
+              ] as const
+            ).map(([id, label, value, setValue]) => (
+              <div key={id} className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor={id}>{label}</Label>
+                <Select
+                  items={columnItems}
+                  value={value || null}
+                  onValueChange={(next) => setValue(next ?? '')}
+                >
+                  <SelectTrigger id={id} className="w-full">
+                    <SelectValue placeholder={t.mapping.columnPlaceholder} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {headers.map((header, index) => (
+                      <SelectItem key={index} value={String(index)}>
+                        {header}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t.mapping.sampleTitle}
+            </span>
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    {headers.map((header, index) => (
+                      <th key={index} className="px-2 py-1.5 text-left font-medium">
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sampleRows.map((row, rowIndex) => (
+                    <tr key={rowIndex} className="border-b last:border-0">
+                      {headers.map((_, columnIndex) => (
+                        <td key={columnIndex} className="px-2 py-1.5 whitespace-nowrap">
+                          {row[columnIndex] ?? ''}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 'preview' && preview && (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-medium">
+            {t.preview.summary(preview.newCount, preview.duplicateCount)}
+          </p>
+          <ul className="max-h-56 divide-y divide-border overflow-y-auto rounded-md border">
+            {preview.rows.map((row) => (
+              <li
+                key={row.line}
+                className={`flex items-center justify-between gap-3 px-3 py-2 text-sm ${
+                  row.duplicate ? 'opacity-50' : ''
+                }`}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate">{row.label}</span>
+                  {row.duplicate && (
+                    <Badge variant="outline" className="shrink-0">
+                      {t.preview.duplicateBadge}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-3 text-muted-foreground">
+                  <span>{formatDate(new Date(row.date))}</span>
+                  <span className="font-medium tabular-nums text-foreground">
+                    {formatEur(row.amount)}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <DialogFooter>
+        <DialogClose render={<Button type="button" variant="outline" />}>
+          {t.dialog.cancel}
+        </DialogClose>
+        {step === 'mapping' && (
+          <Button type="button" variant="outline" disabled={busy} onClick={() => setStep('setup')}>
+            {t.dialog.back}
+          </Button>
+        )}
+        {step === 'setup' && (
+          <Button
+            type="button"
+            disabled={busy || file === null || accountValue === ''}
+            onClick={continueFromSetup}
+          >
+            {t.dialog.continue}
+          </Button>
+        )}
+        {step === 'mapping' && (
+          <Button type="button" disabled={busy} onClick={previewFromMapping}>
+            {t.mapping.submit}
+          </Button>
+        )}
+        {step === 'preview' && preview && (
+          <Button type="button" disabled={busy} onClick={commit}>
+            {t.preview.submit(preview.newCount)}
+          </Button>
+        )}
+      </DialogFooter>
+    </div>
+  )
+}

@@ -177,7 +177,15 @@ export const importsRouter = base.router({
       const flagged = flagAgainstStored(context.db, input.accountId, rows);
       const duplicateCount = flagged.filter((row) => row.duplicate).length;
       return {
-        rows: flagged,
+        // Explicit payload (not the internal FlaggedRow) — the fingerprint is
+        // an implementation detail, and the renderer only renders these.
+        rows: flagged.map((row) => ({
+          line: row.line,
+          date: row.date,
+          amount: row.amount,
+          label: row.label,
+          duplicate: row.duplicate,
+        })),
         newCount: flagged.length - duplicateCount,
         duplicateCount,
       };
