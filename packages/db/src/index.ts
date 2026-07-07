@@ -55,8 +55,13 @@ export function migrateToLatest(db: Db): void {
 export * from "./schema";
 
 export { getAccountBalance, getAccountBalances } from "./balances";
-export { createTransfer, getTransfer } from "./transfers";
-export type { Transfer, TransferInput } from "./transfers";
+export {
+  createTransfer,
+  getTransfer,
+  updateTransfer,
+  deleteTransfer,
+} from "./transfers";
+export type { Transfer, TransferInput, UpdateTransferInput } from "./transfers";
 export { DEFAULT_CATEGORY_SEED, seedDefaultCategories } from "./seed";
 export {
   createBackup,

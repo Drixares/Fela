@@ -26,7 +26,7 @@ import { Controller, useForm } from 'react-hook-form'
 import { z } from 'zod'
 
 import { fromDateInputValue, toDateInputValue } from '../../lib/datetime'
-import { centsToInput, parseEurToCents } from '../../lib/money'
+import { centsToInput, positiveEurCentsField } from '../../lib/money'
 import { type Account, type CategoriesOverview, type Transaction, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
 
@@ -47,21 +47,10 @@ type Direction = 'expense' | 'income'
 const transactionFormSchema = z.object({
   account: z.string().min(1, t.form.accountRequired),
   direction: z.enum(['expense', 'income']),
-  amount: z.string().transform((value, ctx) => {
-    if (value.trim() === '') {
-      ctx.addIssue({ code: 'custom', message: t.form.amountRequired })
-      return z.NEVER
-    }
-    const cents = parseEurToCents(value)
-    if (cents === null) {
-      ctx.addIssue({ code: 'custom', message: t.form.amountInvalid })
-      return z.NEVER
-    }
-    if (cents <= 0) {
-      ctx.addIssue({ code: 'custom', message: t.form.amountPositive })
-      return z.NEVER
-    }
-    return cents
+  amount: positiveEurCentsField({
+    required: t.form.amountRequired,
+    invalid: t.form.amountInvalid,
+    positive: t.form.amountPositive
   }),
   date: z.string().min(1, t.form.dateRequired),
   payee: z.string(),

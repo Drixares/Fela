@@ -201,6 +201,42 @@ export const strings = {
       deleteError: 'Impossible de supprimer la transaction.'
     }
   },
+  transfers: {
+    // A transfer moves money between two of the user's own accounts; it is
+    // neither a revenue nor an expense (see issue #7).
+    add: 'Virement',
+    // Shown on each leg in the transactions list so a transfer never reads as a
+    // plain expense or revenue.
+    badge: 'Virement',
+    form: {
+      title: 'Nouveau virement',
+      description: 'Déplacez de l’argent entre deux de vos comptes, sans catégorie.',
+      fromLabel: 'Compte source',
+      fromPlaceholder: 'D’où part l’argent',
+      toLabel: 'Compte destination',
+      toPlaceholder: 'Où arrive l’argent',
+      amountLabel: 'Montant (€)',
+      amountPlaceholder: '0,00',
+      dateLabel: 'Date',
+      payeeLabel: 'Libellé',
+      payeePlaceholder: 'Épargne, remboursement…',
+      noteLabel: 'Note',
+      notePlaceholder: 'Facultatif',
+      submit: 'Enregistrer le virement',
+      cancel: 'Annuler',
+      fromRequired: 'Choisissez le compte source.',
+      toRequired: 'Choisissez le compte destination.',
+      sameAccount: 'Les deux comptes doivent être différents.',
+      amountRequired: 'Le montant est requis.',
+      amountInvalid: 'Montant invalide.',
+      amountPositive: 'Le montant doit être supérieur à zéro.',
+      dateRequired: 'La date est requise.'
+    },
+    toast: {
+      created: 'Virement enregistré.',
+      createError: 'Impossible d’enregistrer le virement.'
+    }
+  },
   backups: {
     title: 'Sauvegardes',
     description:

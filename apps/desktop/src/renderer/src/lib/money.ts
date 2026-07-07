@@ -6,6 +6,8 @@
  * site.
  */
 
+import { z } from 'zod'
+
 const eurFormatter = new Intl.NumberFormat('fr-FR', {
   style: 'currency',
   currency: 'EUR'
@@ -39,4 +41,34 @@ export function parseEurToCents(input: string): number | null {
   if (!Number.isFinite(euros)) return null
 
   return Math.round(euros * 100)
+}
+
+/**
+ * A reusable form field that reads a *positive* euros amount the user typed and
+ * yields integer cents, failing with the caller's own message at each step. Both
+ * the transaction and the transfer form take a positive amount this way, so the
+ * empty → invalid → non-positive parse ladder lives here instead of once per
+ * form. The three messages are passed in because each form phrases them itself.
+ */
+export function positiveEurCentsField(messages: {
+  required: string
+  invalid: string
+  positive: string
+}): z.ZodType<number, string> {
+  return z.string().transform((value, ctx) => {
+    if (value.trim() === '') {
+      ctx.addIssue({ code: 'custom', message: messages.required })
+      return z.NEVER
+    }
+    const cents = parseEurToCents(value)
+    if (cents === null) {
+      ctx.addIssue({ code: 'custom', message: messages.invalid })
+      return z.NEVER
+    }
+    if (cents <= 0) {
+      ctx.addIssue({ code: 'custom', message: messages.positive })
+      return z.NEVER
+    }
+    return cents
+  })
 }

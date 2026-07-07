@@ -27,8 +27,10 @@ import { type Transaction, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
 import { DeleteTransactionDialog } from './DeleteTransactionDialog'
 import { TransactionFormDialog } from './TransactionFormDialog'
+import { TransferFormDialog } from './TransferFormDialog'
 
 const t = strings.transactions
+const transferStrings = strings.transfers
 
 /** Sentinel filter value meaning "every account, combined". */
 const ALL_ACCOUNTS = 'all'
@@ -43,6 +45,7 @@ const ALL_ACCOUNTS = 'all'
 export function TransactionsPanel(): React.JSX.Element {
   const [filter, setFilter] = useState<string>(ALL_ACCOUNTS)
   const [formOpen, setFormOpen] = useState(false)
+  const [transferOpen, setTransferOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | undefined>(undefined)
   const [deleting, setDeleting] = useState<Transaction | undefined>(undefined)
 
@@ -58,6 +61,8 @@ export function TransactionsPanel(): React.JSX.Element {
 
   const liveAccounts = accounts ?? []
   const hasAccounts = liveAccounts.length > 0
+  // A transfer needs a source and a destination, so it takes at least two accounts.
+  const canTransfer = liveAccounts.length >= 2
   const showAccountName = filter === ALL_ACCOUNTS
 
   function openCreate(): void {
@@ -104,6 +109,12 @@ export function TransactionsPanel(): React.JSX.Element {
                 ))}
               </SelectContent>
             </Select>
+            {canTransfer && (
+              <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)}>
+                <ArrowLeftRightIcon />
+                {transferStrings.add}
+              </Button>
+            )}
             <Button size="sm" onClick={openCreate}>
               <PlusIcon />
               {t.add}
@@ -170,8 +181,15 @@ export function TransactionsPanel(): React.JSX.Element {
                         <span>{transaction.accountName}</span>
                       </>
                     )}
-                    {transaction.categoryName && (
-                      <Badge variant="secondary">{transaction.categoryName}</Badge>
+                    {transaction.transferId !== null ? (
+                      <Badge variant="outline" className="gap-1">
+                        <ArrowLeftRightIcon className="size-3" />
+                        {transferStrings.badge}
+                      </Badge>
+                    ) : (
+                      transaction.categoryName && (
+                        <Badge variant="secondary">{transaction.categoryName}</Badge>
+                      )
                     )}
                   </div>
                 </div>
@@ -215,6 +233,12 @@ export function TransactionsPanel(): React.JSX.Element {
         transaction={editing}
         accounts={liveAccounts}
         categories={categories}
+        defaultAccountId={accountId}
+      />
+      <TransferFormDialog
+        open={transferOpen}
+        onOpenChange={setTransferOpen}
+        accounts={liveAccounts}
         defaultAccountId={accountId}
       />
       <DeleteTransactionDialog
