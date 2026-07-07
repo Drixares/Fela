@@ -59,7 +59,11 @@ test("transfers.create moves money as two coherent, category-less legs", async (
   expect(await balanceOf(context, to)).toBe(3_000);
 
   // Two linked legs, sharing the id, neither filed under a category.
-  const legs = await call(appRouter.transactions.list, undefined, { context });
+  const { transactions: legs } = await call(
+    appRouter.transactions.list,
+    undefined,
+    { context }
+  );
   expect(legs).toHaveLength(2);
   expect(legs.every((leg) => leg.transferId === transfer.transferId)).toBe(
     true
@@ -114,7 +118,11 @@ test("transfers.create rejects same account, unknown account and a non-positive 
   ).rejects.toThrow();
 
   // None of the rejected attempts wrote a row, and both balances are untouched.
-  const legs = await call(appRouter.transactions.list, undefined, { context });
+  const { transactions: legs } = await call(
+    appRouter.transactions.list,
+    undefined,
+    { context }
+  );
   expect(legs).toHaveLength(0);
   expect(await balanceOf(context, from)).toBe(10_000);
   expect(await balanceOf(context, to)).toBe(0);
@@ -159,7 +167,11 @@ test("transfers.update changes both legs atomically and leaves no orphan", async
 
   // Exactly two legs still share the id — one negative on the (unchanged)
   // source, one positive on the new destination; the old one no longer moves.
-  const legs = await call(appRouter.transactions.list, undefined, { context });
+  const { transactions: legs } = await call(
+    appRouter.transactions.list,
+    undefined,
+    { context }
+  );
   expect(legs.filter((l) => l.transferId === transfer.transferId)).toHaveLength(
     2
   );
@@ -205,7 +217,11 @@ test("transfers.update rejects a same-account or unknown-account edit, writing n
   // A rejected edit writes nothing: the two legs are byte-for-byte as created —
   // same count, accounts, amounts and no category — so neither is left orphaned
   // or half-updated, and both balances still hold.
-  const legs = await call(appRouter.transactions.list, undefined, { context });
+  const { transactions: legs } = await call(
+    appRouter.transactions.list,
+    undefined,
+    { context }
+  );
   expect(legs.filter((l) => l.transferId === transfer.transferId)).toHaveLength(
     2
   );
@@ -254,7 +270,11 @@ test("transfers.delete removes both legs and restores the balances", async () =>
   expect(result).toEqual({ transferId: transfer.transferId });
 
   // Both legs are gone — no orphan left behind — and the balances are as before.
-  const legs = await call(appRouter.transactions.list, undefined, { context });
+  const { transactions: legs } = await call(
+    appRouter.transactions.list,
+    undefined,
+    { context }
+  );
   expect(legs).toHaveLength(0);
   expect(await balanceOf(context, from)).toBe(10_000);
   expect(await balanceOf(context, to)).toBe(0);

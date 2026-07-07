@@ -1,7 +1,8 @@
 import { ORPCError } from "@orpc/server";
 import { accounts, categories, transactions } from "@repo/db";
 import type { Db, Transaction } from "@repo/db";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { base } from "../../context.js";
@@ -28,6 +29,78 @@ const noteSchema = z.string().max(1000).nullish();
 
 const notFound = (id: number): ORPCError<"NOT_FOUND", undefined> =>
   new ORPCError("NOT_FOUND", { message: `No transaction with id ${id}` });
+
+/**
+ * Combinable filters over the ledger (see issue #9). Every field is optional
+ * and they compose with AND, so the list narrows as filters stack.
+ *
+ * `categoryId` carries three states: absent = any category, an id = that
+ * category only, `null` = uncategorized. The `null` case excludes transfer
+ * legs — they carry no category by design, so they are never a filing todo.
+ *
+ * `minAmount`/`maxAmount` bound the amount's *magnitude* in minor units: a
+ * person thinks « plus de 30 € » whatever the direction, while storage is
+ * signed.
+ */
+const listFiltersSchema = z
+  .object({
+    accountId: idSchema.optional(),
+    categoryId: idSchema.nullish(),
+    search: z.string().max(200).optional(),
+    from: z.date().optional(),
+    to: z.date().optional(),
+    minAmount: z.int().nonnegative().optional(),
+    maxAmount: z.int().nonnegative().optional(),
+  })
+  .optional();
+
+type ListFilters = NonNullable<z.output<typeof listFiltersSchema>>;
+
+/**
+ * Translate the list filters into one SQL WHERE clause — filtering happens in
+ * the database, never by sifting rows in JS, so the same clause can drive both
+ * the rows query and the aggregates query and the two can never disagree.
+ */
+function listFilterClause(input: ListFilters | undefined): SQL | undefined {
+  if (!input) return undefined;
+  const conditions: SQL[] = [];
+
+  if (input.accountId !== undefined) {
+    conditions.push(eq(transactions.accountId, input.accountId));
+  }
+
+  if (input.categoryId === null) {
+    conditions.push(isNull(transactions.categoryId));
+    conditions.push(isNull(transactions.transferId));
+  } else if (input.categoryId !== undefined) {
+    conditions.push(eq(transactions.categoryId, input.categoryId));
+  }
+
+  const search = input.search?.trim();
+  if (search) {
+    // Escape LIKE's wildcards so the person's text is matched literally.
+    const pattern = `%${search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    conditions.push(
+      sql`(${transactions.payee} LIKE ${pattern} ESCAPE '\\' OR ${transactions.note} LIKE ${pattern} ESCAPE '\\')`
+    );
+  }
+
+  if (input.from !== undefined) {
+    conditions.push(gte(transactions.date, input.from));
+  }
+  if (input.to !== undefined) {
+    conditions.push(lte(transactions.date, input.to));
+  }
+
+  if (input.minAmount !== undefined) {
+    conditions.push(sql`abs(${transactions.amount}) >= ${input.minAmount}`);
+  }
+  if (input.maxAmount !== undefined) {
+    conditions.push(sql`abs(${transactions.amount}) <= ${input.maxAmount}`);
+  }
+
+  return and(...conditions);
+}
 
 /** Trim a free-text field, collapsing an empty or whitespace-only value to null. */
 function normalizeText(value: string | null | undefined): string | null {
@@ -117,37 +190,96 @@ function loadEditable(db: Db, id: number): Transaction {
  */
 export const transactionsRouter = base.router({
   /**
-   * Every transaction, most recent first (ties broken by insertion order), each
-   * carrying its account and category names for display. Pass `accountId` to
-   * narrow the list to a single account; omit it for all accounts combined.
+   * The transactions matching the filters (see {@link listFiltersSchema}; no
+   * filters = everything), most recent first (ties broken by insertion order),
+   * each carrying its account and category names for display — plus the
+   * matching rows' `count` and signed `sum`, aggregated in SQL from the same
+   * WHERE clause so « combien chez Amazon cette année ? » is answered by the
+   * list itself.
    */
-  list: base
-    .input(z.object({ accountId: idSchema.optional() }).optional())
-    .handler(async ({ context, input }) => {
-      const rows = context.db
-        .select({
-          transaction: transactions,
-          accountName: accounts.name,
-          categoryName: categories.name,
-        })
-        .from(transactions)
-        .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-        .leftJoin(categories, eq(transactions.categoryId, categories.id))
-        .where(
-          input?.accountId
-            ? eq(transactions.accountId, input.accountId)
-            : undefined
-        )
-        .orderBy(desc(transactions.date), desc(transactions.id))
-        .all();
+  list: base.input(listFiltersSchema).handler(async ({ context, input }) => {
+    const filter = listFilterClause(input);
 
-      return rows.map(
+    const rows = context.db
+      .select({
+        transaction: transactions,
+        accountName: accounts.name,
+        categoryName: categories.name,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .leftJoin(categories, eq(transactions.categoryId, categories.id))
+      .where(filter)
+      .orderBy(desc(transactions.date), desc(transactions.id))
+      .all();
+
+    const totals = context.db
+      .select({
+        count: sql<number>`count(*)`,
+        sum: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
+      })
+      .from(transactions)
+      .where(filter)
+      .get();
+
+    return {
+      transactions: rows.map(
         (row): TransactionWithNames => ({
           ...row.transaction,
           accountName: row.accountName,
           categoryName: row.categoryName,
         })
-      );
+      ),
+      count: totals?.count ?? 0,
+      sum: totals?.sum ?? 0,
+    };
+  }),
+
+  /**
+   * File many transactions under one category in a single gesture — the bulk
+   * correction pass after an import (see issue #9). `categoryId: null` clears
+   * the category instead. All-or-nothing: every id must name an existing,
+   * non-transfer transaction (a transfer leg carries no category by design),
+   * and the rows are only written once every one has passed the check.
+   */
+  bulkCategorize: base
+    .input(
+      z.object({
+        ids: z.array(idSchema).min(1),
+        categoryId: idSchema.nullable(),
+      })
+    )
+    .handler(async ({ context, input }) => {
+      if (input.categoryId !== null) {
+        assertCategoryExists(context.db, input.categoryId);
+      }
+
+      const ids = [...new Set(input.ids)];
+      context.db.transaction((tx) => {
+        const rows = tx
+          .select({ id: transactions.id, transferId: transactions.transferId })
+          .from(transactions)
+          .where(inArray(transactions.id, ids))
+          .all();
+
+        if (rows.length !== ids.length) {
+          const found = new Set(rows.map((row) => row.id));
+          const missing = ids.find((id) => !found.has(id));
+          throw notFound(missing!);
+        }
+        if (rows.some((row) => row.transferId !== null)) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Cannot categorize a transfer leg",
+          });
+        }
+
+        tx.update(transactions)
+          .set({ categoryId: input.categoryId })
+          .where(inArray(transactions.id, ids))
+          .run();
+      });
+
+      return { updated: ids.length };
     }),
 
   /**
