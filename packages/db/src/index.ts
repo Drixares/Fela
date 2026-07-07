@@ -26,6 +26,17 @@ export function createDb(path: string) {
 export type Db = ReturnType<typeof createDb>;
 
 /**
+ * Close the database's underlying connection, releasing the file on disk.
+ *
+ * The main process calls this before restoring a backup (which overwrites the
+ * file). Hides the reach through Drizzle to the better-sqlite3 handle so callers
+ * don't depend on that internal.
+ */
+export function closeDb(db: Db): void {
+  db.$client.close();
+}
+
+/**
  * Apply every generated migration to `db`, bringing an empty database up to the
  * current schema. Idempotent — drizzle tracks applied migrations in its own
  * table, so re-running is a no-op.
@@ -47,3 +58,14 @@ export { getAccountBalance, getAccountBalances } from "./balances";
 export { createTransfer, getTransfer } from "./transfers";
 export type { Transfer, TransferInput } from "./transfers";
 export { DEFAULT_CATEGORY_SEED, seedDefaultCategories } from "./seed";
+export {
+  createBackup,
+  listBackups,
+  restoreBackup,
+  DEFAULT_BACKUP_RETENTION,
+} from "./backups";
+export type {
+  BackupFile,
+  CreateBackupOptions,
+  CreateBackupResult,
+} from "./backups";

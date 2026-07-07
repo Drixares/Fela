@@ -140,6 +140,37 @@ export const strings = {
       categoryDeleteError: 'Impossible de supprimer la catégorie.'
     }
   },
+  backups: {
+    title: 'Sauvegardes',
+    description:
+      'Copies rotatives de votre base, écrites dans un dossier que vous choisissez. Pointez-le vers Dropbox ou iCloud Drive pour une copie hors-site — l’app n’accède jamais au réseau.',
+    folderLabel: 'Dossier de sauvegarde',
+    noFolder: 'Aucun dossier configuré.',
+    chooseFolder: 'Choisir un dossier',
+    changeFolder: 'Changer',
+    backupNow: 'Sauvegarder maintenant',
+    lastBackup: (when: string) => `Dernière sauvegarde : ${when}`,
+    neverBackedUp: 'Aucune sauvegarde effectuée pour l’instant.',
+    listTitle: 'Sauvegardes disponibles',
+    count: (n: number) => `${n} sauvegarde${n > 1 ? 's' : ''}`,
+    empty: 'Aucune sauvegarde dans ce dossier.',
+    emptyHint:
+      'Une sauvegarde est créée automatiquement au démarrage ; vous pouvez aussi en lancer une maintenant.',
+    restore: 'Restaurer',
+    restoreDialog: {
+      title: 'Restaurer cette sauvegarde ?',
+      description: (when: string) =>
+        `Votre base actuelle sera remplacée par la sauvegarde du ${when}. Les modifications faites depuis seront perdues, et l’application redémarrera.`,
+      confirm: 'Restaurer et redémarrer',
+      cancel: 'Annuler'
+    },
+    toast: {
+      created: 'Sauvegarde créée.',
+      createError: 'Impossible de créer la sauvegarde.',
+      chooseError: 'Impossible de sélectionner le dossier.',
+      restoreError: 'Impossible de restaurer la sauvegarde.'
+    }
+  },
   versions: {
     electron: (version: string | undefined) => `Electron v${version ?? ''}`,
     chromium: (version: string | undefined) => `Chromium v${version ?? ''}`,

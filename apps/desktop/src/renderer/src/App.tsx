@@ -1,6 +1,6 @@
 import { AccountsPanel } from './components/accounts/AccountsPanel'
+import { BackupsPanel } from './components/backups/BackupsPanel'
 import { CategoriesPanel } from './components/categories/CategoriesPanel'
-import Versions from './components/Versions'
 import { strings } from './lib/strings'
 
 function App(): React.JSX.Element {
@@ -12,10 +12,8 @@ function App(): React.JSX.Element {
       </header>
 
       <AccountsPanel />
-
       <CategoriesPanel />
-
-      <Versions />
+      <BackupsPanel />
     </main>
   )
 }

@@ -1,7 +1,17 @@
 import { electronAPI } from '@electron-toolkit/preload'
 import { contextBridge, ipcRenderer } from 'electron'
+import { BACKUP_CHANNELS, type FelaApi } from '../shared/ipc'
 
-const api = {}
+// The renderer never touches the database file; it drives backups through this
+// thin bridge to the main-process handlers (see src/main/backups.ts).
+const api: FelaApi = {
+  backups: {
+    getState: () => ipcRenderer.invoke(BACKUP_CHANNELS.getState),
+    chooseDirectory: () => ipcRenderer.invoke(BACKUP_CHANNELS.chooseDirectory),
+    createNow: () => ipcRenderer.invoke(BACKUP_CHANNELS.createNow),
+    restore: (backupPath) => ipcRenderer.invoke(BACKUP_CHANNELS.restore, backupPath)
+  }
+}
 
 window.addEventListener('message', (event) => {
   if (event.data === 'start-orpc-client') {
