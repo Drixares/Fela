@@ -21,6 +21,7 @@ import {
   SelectValue
 } from '@repo/ui/components/select'
 import { Skeleton } from '@repo/ui/components/skeleton'
+
 import { toast } from '@repo/ui/components/sonner'
 import {
   ArrowLeftRightIcon,
@@ -28,7 +29,8 @@ import {
   PencilIcon,
   PlusIcon,
   SearchIcon,
-  Trash2Icon
+  Trash2Icon,
+  FileUpIcon
 } from 'lucide-react'
 
 import { formatDate, fromDateInputValue, fromDateInputValueEndOfDay } from '../../lib/datetime'
@@ -41,6 +43,7 @@ import {
   flatCategories
 } from '../categories/CategorySelectOptions'
 import { DeleteTransactionDialog } from './DeleteTransactionDialog'
+import { ImportCsvDialog } from './ImportCsvDialog'
 import { TransactionFormDialog } from './TransactionFormDialog'
 import { TransferFormDialog } from './TransferFormDialog'
 
@@ -48,6 +51,7 @@ const t = strings.transactions
 const f = strings.transactions.filters
 const s = strings.transactions.selection
 const transferStrings = strings.transfers
+const importStrings = strings.imports
 
 /** Sentinel filter value meaning "every account, combined". */
 const ALL_ACCOUNTS = 'all'
@@ -105,6 +109,7 @@ export function TransactionsPanel(): React.JSX.Element {
 
   const [formOpen, setFormOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | undefined>(undefined)
   const [deleting, setDeleting] = useState<Transaction | undefined>(undefined)
 
@@ -251,6 +256,27 @@ export function TransactionsPanel(): React.JSX.Element {
         </div>
         {hasAccounts && (
           <div className="flex items-center gap-2">
+            <Select
+              items={filterItems}
+              value={filter}
+              onValueChange={(value) => setFilter(value ?? ALL_ACCOUNTS)}
+            >
+              <SelectTrigger size="sm" aria-label={t.filterLabel}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_ACCOUNTS}>{t.allAccounts}</SelectItem>
+                {liveAccounts.map((account) => (
+                  <SelectItem key={account.id} value={String(account.id)}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+              <FileUpIcon />
+              {importStrings.add}
+            </Button>
             {canTransfer && (
               <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)}>
                 <ArrowLeftRightIcon />
@@ -540,6 +566,12 @@ export function TransactionsPanel(): React.JSX.Element {
       <TransferFormDialog
         open={transferOpen}
         onOpenChange={setTransferOpen}
+        accounts={liveAccounts}
+        defaultAccountId={accountId}
+      />
+      <ImportCsvDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
         accounts={liveAccounts}
         defaultAccountId={accountId}
       />

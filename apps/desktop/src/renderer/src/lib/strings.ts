@@ -230,6 +230,49 @@ export const strings = {
       deleteError: 'Impossible de supprimer la transaction.'
     }
   },
+  imports: {
+    // CSV import flow (see issue #8): pick a file and an account, map the
+    // columns on the first import, preview, then validate.
+    add: 'Importer CSV',
+    dialog: {
+      title: 'Importer un fichier CSV',
+      description:
+        'Importez un relevé exporté depuis votre banque. Rien n’est écrit avant votre validation.',
+      accountLabel: 'Compte cible',
+      accountPlaceholder: 'Choisir un compte',
+      chooseFile: 'Choisir un fichier…',
+      noFile: 'Aucun fichier sélectionné.',
+      continue: 'Continuer',
+      back: 'Retour',
+      cancel: 'Annuler',
+      refused: (detail: string) => `Import refusé : ${detail}`
+    },
+    mapping: {
+      title: 'Associer les colonnes',
+      description:
+        'Premier import sur ce compte : indiquez quelle colonne contient chaque valeur. Ce choix sera mémorisé pour les prochains imports.',
+      dateLabel: 'Date',
+      amountLabel: 'Montant',
+      labelLabel: 'Libellé',
+      columnPlaceholder: 'Choisir une colonne',
+      sampleTitle: 'Aperçu du fichier',
+      submit: 'Prévisualiser',
+      required: 'Choisissez les trois colonnes.',
+      distinct: 'Chaque valeur doit venir d’une colonne différente.'
+    },
+    preview: {
+      title: 'Prévisualisation',
+      summary: (added: number, duplicates: number) =>
+        `${added} nouvelle${added > 1 ? 's' : ''} transaction${added > 1 ? 's' : ''}, ` +
+        `${duplicates} doublon${duplicates > 1 ? 's' : ''} probable${duplicates > 1 ? 's' : ''} ignoré${duplicates > 1 ? 's' : ''}.`,
+      duplicateBadge: 'Doublon probable',
+      submit: (added: number) => `Importer ${added} transaction${added > 1 ? 's' : ''}`
+    },
+    toast: {
+      imported: (added: number) =>
+        `${added} transaction${added > 1 ? 's' : ''} importée${added > 1 ? 's' : ''}.`
+    }
+  },
   transfers: {
     // A transfer moves money between two of the user's own accounts; it is
     // neither a revenue nor an expense (see issue #7).

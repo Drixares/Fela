@@ -46,9 +46,27 @@ export interface BackupsApi {
   restore(backupPath: string): Promise<void>
 }
 
+/**
+ * A CSV file the user picked for import: its name (shown in the import
+ * dialog) and its full decoded content. The import procedures take content as
+ * a string — never a path — so reading the file is the main process's job and
+ * ends here (see the V1 PRD, #1, and issue #8).
+ */
+export interface ChosenCsvFile {
+  name: string
+  content: string
+}
+
+/** The imports surface exposed on `window.api.imports` in the renderer. */
+export interface ImportsApi {
+  /** Prompt for a CSV file (native dialog); `null` if the user cancels. */
+  chooseCsvFile(): Promise<ChosenCsvFile | null>
+}
+
 /** The full preload API surface bridged to the renderer. */
 export interface FelaApi {
   backups: BackupsApi
+  imports: ImportsApi
 }
 
 /** IPC channel names, shared between the main handlers and the preload bridge. */
@@ -57,4 +75,8 @@ export const BACKUP_CHANNELS = {
   chooseDirectory: 'backups:chooseDirectory',
   createNow: 'backups:createNow',
   restore: 'backups:restore'
+} as const
+
+export const IMPORT_CHANNELS = {
+  chooseCsvFile: 'imports:chooseCsvFile'
 } as const
