@@ -1,18 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
 import Versions from './components/Versions'
-import { client } from './lib/orpc'
+import { orpc } from './lib/orpc'
 import { strings } from './lib/strings'
 
 function App(): React.JSX.Element {
-  const [accountCount, setAccountCount] = useState<number | null>(null)
-
-  useEffect(() => {
-    client.accounts
-      .list()
-      .then((accounts) => setAccountCount(accounts.length))
-      .catch((error) => console.error(error))
-  }, [])
+  const { data: accounts, isLoading } = useQuery(orpc.accounts.list.queryOptions())
 
   return (
     <main className="mx-auto flex max-w-md flex-col gap-6 p-8">
@@ -24,11 +17,11 @@ function App(): React.JSX.Element {
       <section className="flex flex-col gap-1">
         <h2 className="text-sm font-medium uppercase tracking-wide">{strings.accounts.title}</h2>
         <p className="text-muted-foreground">
-          {accountCount === null
+          {isLoading || !accounts
             ? strings.accounts.loading
-            : accountCount === 0
+            : accounts.length === 0
               ? strings.accounts.empty
-              : strings.accounts.count(accountCount)}
+              : strings.accounts.count(accounts.length)}
         </p>
       </section>
 

@@ -31,6 +31,9 @@ importers:
       "@electron-toolkit/utils":
         specifier: ^4.0.0
         version: 4.0.0(electron@43.0.0)
+      "@orpc/tanstack-query":
+        specifier: ^1.14.6
+        version: 1.14.7(@orpc/client@1.14.7)(@tanstack/query-core@5.101.2)
       "@repo/api":
         specifier: workspace:*
         version: link:../../packages/api
@@ -40,6 +43,9 @@ importers:
       "@repo/ui":
         specifier: workspace:*
         version: link:../../packages/ui
+      "@tanstack/react-query":
+        specifier: ^5.101.2
+        version: 5.101.2(react@19.2.7)
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1
@@ -1762,6 +1768,15 @@ packages:
         integrity: sha512-N+7I4SzYoSVyf5lRbANGz9oBVmZSM/nm2JlxAP+UPSbWnqrjltSFFHVlSdp4wXSb39LVjT74uSLZ9Da1wOyLeg==,
       }
 
+  "@orpc/tanstack-query@1.14.7":
+    resolution:
+      {
+        integrity: sha512-cNOdHwxg6+CHOE9QqVtaWEPMMQLvYzs19xZIs5X69UgmEehWy/zrtmErbxDdzd7a2pTCcZXDcFV7kkl/12ke0Q==,
+      }
+    peerDependencies:
+      "@orpc/client": 1.14.7
+      "@tanstack/query-core": ">=5.80.2"
+
   "@oxc-project/types@0.138.0":
     resolution:
       {
@@ -2334,6 +2349,20 @@ packages:
       }
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  "@tanstack/query-core@5.101.2":
+    resolution:
+      {
+        integrity: sha512-hH5MLoJhF7KaIGd7q3xTXGXvslI+GYlM1Z/35aSHHWaCJWB7XvTSHYuV3eM7tw+aE0mT/xMro4M4Q9rCGHT0lw==,
+      }
+
+  "@tanstack/react-query@5.101.2":
+    resolution:
+      {
+        integrity: sha512-seDkr6kzGzX1okaaTtZPtgA688CDPlXUz1C6xSg0ESqn04Vuc8tlrYms1s3de+znBqhPVxFRfpAfUf+6XvfPWg==,
+      }
+    peerDependencies:
+      react: ^18 || ^19
 
   "@ts-morph/common@0.27.0":
     resolution:
@@ -9130,6 +9159,14 @@ snapshots:
     transitivePeerDependencies:
       - "@opentelemetry/api"
 
+  "@orpc/tanstack-query@1.14.7(@orpc/client@1.14.7)(@tanstack/query-core@5.101.2)":
+    dependencies:
+      "@orpc/client": 1.14.7
+      "@orpc/shared": 1.14.7
+      "@tanstack/query-core": 5.101.2
+    transitivePeerDependencies:
+      - "@opentelemetry/api"
+
   "@oxc-project/types@0.138.0": {}
 
   "@peculiar/asn1-schema@2.8.0":
@@ -9383,6 +9420,13 @@ snapshots:
       "@tailwindcss/oxide": 4.3.2
       tailwindcss: 4.3.2
       vite: 8.1.3(@types/node@26.1.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0)
+
+  "@tanstack/query-core@5.101.2": {}
+
+  "@tanstack/react-query@5.101.2(react@19.2.7)":
+    dependencies:
+      "@tanstack/query-core": 5.101.2
+      react: 19.2.7
 
   "@ts-morph/common@0.27.0":
     dependencies:
