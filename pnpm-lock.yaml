@@ -139,6 +139,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      "@repo/eslint-config":
+        specifier: workspace:*
+        version: link:../eslint-config
       "@repo/typescript-config":
         specifier: workspace:*
         version: link:../typescript-config
@@ -161,6 +164,9 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)
     devDependencies:
+      "@repo/eslint-config":
+        specifier: workspace:*
+        version: link:../eslint-config
       "@repo/typescript-config":
         specifier: workspace:*
         version: link:../typescript-config
