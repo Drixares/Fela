@@ -16,9 +16,7 @@ import { Input } from '@repo/ui/components/input'
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue
 } from '@repo/ui/components/select'
@@ -35,8 +33,13 @@ import {
 
 import { formatDate, fromDateInputValue, fromDateInputValueEndOfDay } from '../../lib/datetime'
 import { formatEur, parseEurToCents } from '../../lib/money'
-import { type CategoriesOverview, type Transaction, orpc } from '../../lib/orpc'
+import { type Transaction, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
+import {
+  CategorySelectOptions,
+  NO_CATEGORY,
+  flatCategories
+} from '../categories/CategorySelectOptions'
 import { DeleteTransactionDialog } from './DeleteTransactionDialog'
 import { TransactionFormDialog } from './TransactionFormDialog'
 import { TransferFormDialog } from './TransferFormDialog'
@@ -52,8 +55,6 @@ const ALL_ACCOUNTS = 'all'
 const ALL_CATEGORIES = 'all'
 /** Sentinel filter value for the "non catégorisées" todo-list after an import. */
 const UNCATEGORIZED = 'none'
-/** Sentinel bulk-recategorize value meaning "clear the category". */
-const NO_CATEGORY = 'none'
 
 /**
  * The value only after it has stopped changing for `delayMs` — so a query
@@ -79,12 +80,6 @@ function parseAmountFilter(raw: string): { cents: number | undefined; invalid: b
   const cents = parseEurToCents(raw)
   if (cents === null || cents < 0) return { cents: undefined, invalid: true }
   return { cents, invalid: false }
-}
-
-/** The category tree flattened to the leaf categories, groups first. */
-function flatCategories(overview: CategoriesOverview | undefined): { id: number; name: string }[] {
-  if (!overview) return []
-  return [...overview.groups.flatMap((g) => g.categories), ...overview.ungrouped]
 }
 
 /**
@@ -155,8 +150,6 @@ export function TransactionsPanel(): React.JSX.Element {
 
   const rows = list?.transactions ?? []
   const leafCategories = flatCategories(categories)
-  const groups = categories?.groups ?? []
-  const ungrouped = categories?.ungrouped ?? []
 
   const hasActiveFilters =
     accountFilter !== ALL_ACCOUNTS ||
@@ -240,36 +233,15 @@ export function TransactionsPanel(): React.JSX.Element {
     ...Object.fromEntries(leafCategories.map((c) => [String(c.id), c.name]))
   }
 
-  /** The grouped category options, shared by the filter and the bulk select. */
-  const categoryOptions = (
-    <>
-      {groups.map(
-        (group) =>
-          group.categories.length > 0 && (
-            <SelectGroup key={group.id}>
-              <SelectLabel>{group.name}</SelectLabel>
-              {group.categories.map((category) => (
-                <SelectItem key={category.id} value={String(category.id)}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          )
-      )}
-      {ungrouped.map((category) => (
-        <SelectItem key={category.id} value={String(category.id)}>
-          {category.name}
-        </SelectItem>
-      ))}
-    </>
-  )
-
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium tracking-wide uppercase">{t.title}</h2>
-          {list && list.count > 0 && (
+          {/* Shown for an empty filtered result too: « 0 transactions · 0,00 € »
+              answers the question the filters ask. Hidden only when the ledger
+              itself is empty, where the empty state already says it all. */}
+          {list && (list.count > 0 || hasActiveFilters) && (
             <p className="text-sm text-muted-foreground">
               {t.count(list.count)}
               <span aria-hidden> · </span>
@@ -337,7 +309,7 @@ export function TransactionsPanel(): React.JSX.Element {
             <SelectContent>
               <SelectItem value={ALL_CATEGORIES}>{f.allCategories}</SelectItem>
               <SelectItem value={UNCATEGORIZED}>{f.uncategorized}</SelectItem>
-              {categoryOptions}
+              <CategorySelectOptions categories={categories} />
             </SelectContent>
           </Select>
           <Input
@@ -461,7 +433,7 @@ export function TransactionsPanel(): React.JSX.Element {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={NO_CATEGORY}>{t.noCategory}</SelectItem>
-                        {categoryOptions}
+                        <CategorySelectOptions categories={categories} />
                       </SelectContent>
                     </Select>
                     <Button

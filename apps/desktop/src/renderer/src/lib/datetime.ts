@@ -51,8 +51,9 @@ export function fromDateInputValue(value: string): Date {
  * carrying any time on the chosen day still fall inside the period.
  */
 export function fromDateInputValueEndOfDay(value: string): Date {
-  const [year, month, day] = value.split('-').map(Number)
-  return new Date(year, month - 1, day, 23, 59, 59, 999)
+  const date = fromDateInputValue(value)
+  date.setHours(23, 59, 59, 999)
+  return date
 }
 
 /** Format a byte count as a short human-readable size, e.g. `1 536` → « 1,5 Ko ». */

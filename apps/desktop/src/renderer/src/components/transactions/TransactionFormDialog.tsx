@@ -14,9 +14,7 @@ import { Label } from '@repo/ui/components/label'
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue
 } from '@repo/ui/components/select'
@@ -29,11 +27,13 @@ import { fromDateInputValue, toDateInputValue } from '../../lib/datetime'
 import { centsToInput, positiveEurCentsField } from '../../lib/money'
 import { type Account, type CategoriesOverview, type Transaction, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
+import {
+  CategorySelectOptions,
+  NO_CATEGORY,
+  flatCategories
+} from '../categories/CategorySelectOptions'
 
 const t = strings.transactions
-
-/** Sentinel select value for "not filed under any category" (values are strings). */
-const NO_CATEGORY = 'none'
 
 type Direction = 'expense' | 'income'
 
@@ -128,18 +128,13 @@ function TransactionForm({
   const update = useMutation(orpc.transactions.update.mutationOptions())
   const pending = create.isPending || update.isPending
 
-  const groups = categories?.groups ?? []
-  const ungrouped = categories?.ungrouped ?? []
-
   // value→label maps so the triggers show names, not ids.
   const accountItems: Record<string, string> = Object.fromEntries(
     accounts.map((a) => [String(a.id), a.name])
   )
   const categoryItems: Record<string, string> = {
     [NO_CATEGORY]: t.form.noCategory,
-    ...Object.fromEntries(
-      [...groups.flatMap((g) => g.categories), ...ungrouped].map((c) => [String(c.id), c.name])
-    )
+    ...Object.fromEntries(flatCategories(categories).map((c) => [String(c.id), c.name]))
   }
 
   const onSubmit = (values: TransactionFormOutput): void => {
@@ -294,24 +289,7 @@ function TransactionForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_CATEGORY}>{t.form.noCategory}</SelectItem>
-                  {groups.map(
-                    (group) =>
-                      group.categories.length > 0 && (
-                        <SelectGroup key={group.id}>
-                          <SelectLabel>{group.name}</SelectLabel>
-                          {group.categories.map((category) => (
-                            <SelectItem key={category.id} value={String(category.id)}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      )
-                  )}
-                  {ungrouped.map((category) => (
-                    <SelectItem key={category.id} value={String(category.id)}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
+                  <CategorySelectOptions categories={categories} />
                 </SelectContent>
               </Select>
             )}

@@ -255,28 +255,29 @@ export const transactionsRouter = base.router({
       }
 
       const ids = [...new Set(input.ids)];
-      const rows = context.db
-        .select({ id: transactions.id, transferId: transactions.transferId })
-        .from(transactions)
-        .where(inArray(transactions.id, ids))
-        .all();
+      context.db.transaction((tx) => {
+        const rows = tx
+          .select({ id: transactions.id, transferId: transactions.transferId })
+          .from(transactions)
+          .where(inArray(transactions.id, ids))
+          .all();
 
-      if (rows.length !== ids.length) {
-        const found = new Set(rows.map((row) => row.id));
-        const missing = ids.find((id) => !found.has(id));
-        throw notFound(missing!);
-      }
-      if (rows.some((row) => row.transferId !== null)) {
-        throw new ORPCError("BAD_REQUEST", {
-          message: "Cannot categorize a transfer leg",
-        });
-      }
+        if (rows.length !== ids.length) {
+          const found = new Set(rows.map((row) => row.id));
+          const missing = ids.find((id) => !found.has(id));
+          throw notFound(missing!);
+        }
+        if (rows.some((row) => row.transferId !== null)) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "Cannot categorize a transfer leg",
+          });
+        }
 
-      context.db
-        .update(transactions)
-        .set({ categoryId: input.categoryId })
-        .where(inArray(transactions.id, ids))
-        .run();
+        tx.update(transactions)
+          .set({ categoryId: input.categoryId })
+          .where(inArray(transactions.id, ids))
+          .run();
+      });
 
       return { updated: ids.length };
     }),
