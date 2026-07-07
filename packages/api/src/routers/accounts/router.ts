@@ -37,7 +37,7 @@ export const accountsRouter = base.router({
    */
   list: base
     .input(z.object({ includeArchived: z.boolean().default(false) }).optional())
-    .handler(async ({ context, input }): Promise<AccountWithBalance[]> => {
+    .handler(async ({ context, input }) => {
       const rows = await context.db
         .select()
         .from(accounts)
@@ -68,7 +68,7 @@ export const accountsRouter = base.router({
         initialBalance: balanceSchema.default(0),
       })
     )
-    .handler(async ({ context, input }): Promise<AccountWithBalance> => {
+    .handler(async ({ context, input }) => {
       const created = context.db
         .insert(accounts)
         .values({
@@ -96,7 +96,7 @@ export const accountsRouter = base.router({
         initialBalance: balanceSchema.optional(),
       })
     )
-    .handler(async ({ context, input }): Promise<AccountWithBalance> => {
+    .handler(async ({ context, input }) => {
       const { id, ...changes } = input;
 
       // With no fields to change, skip the write (an empty `.set({})` is an
@@ -125,7 +125,7 @@ export const accountsRouter = base.router({
    */
   archive: base
     .input(z.object({ id: idSchema, archived: z.boolean().default(true) }))
-    .handler(async ({ context, input }): Promise<AccountWithBalance> => {
+    .handler(async ({ context, input }) => {
       const updated = context.db
         .update(accounts)
         .set({ archived: input.archived })

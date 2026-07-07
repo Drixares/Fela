@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { ACCOUNT_TYPES, type AccountType } from '@repo/api/client'
 import { Button } from '@repo/ui/components/button'
 import {
@@ -21,6 +20,9 @@ import {
   SelectValue
 } from '@repo/ui/components/select'
 import { toast } from '@repo/ui/components/sonner'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Controller, useForm } from 'react-hook-form'
+import { z } from 'zod'
 
 import { centsToInput, parseEurToCents } from '../../lib/money'
 import { type Account, orpc } from '../../lib/orpc'
@@ -30,6 +32,27 @@ const t = strings.accounts
 
 /** Value→label map so the select trigger shows the French label, not the code. */
 const typeItems: Record<AccountType, string> = t.types
+
+/**
+ * The form's validation contract. `balance` is typed in euros and parsed to
+ * integer cents by the schema itself, so the submit handler receives the exact
+ * `initialBalance` the API expects — the euro↔cents crossing stays in one place.
+ */
+const accountFormSchema = z.object({
+  name: z.string().trim().min(1, t.form.nameRequired).max(100),
+  type: z.enum(ACCOUNT_TYPES, { error: t.form.typeRequired }),
+  balance: z.string().transform((value, ctx) => {
+    const cents = parseEurToCents(value)
+    if (cents === null) {
+      ctx.addIssue({ code: 'custom', message: t.form.invalidBalance })
+      return z.NEVER
+    }
+    return cents
+  })
+})
+
+type AccountFormInput = z.input<typeof accountFormSchema>
+type AccountFormOutput = z.output<typeof accountFormSchema>
 
 interface AccountFormDialogProps {
   open: boolean
@@ -71,29 +94,25 @@ function AccountForm({
   const isEdit = account !== undefined
   const queryClient = useQueryClient()
 
-  const [name, setName] = useState(account?.name ?? '')
-  const [type, setType] = useState<AccountType | null>(
-    (account?.type as AccountType | undefined) ?? null
-  )
-  const [balance, setBalance] = useState(account ? centsToInput(account.initialBalance) : '')
-  const [balanceError, setBalanceError] = useState(false)
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors }
+  } = useForm<AccountFormInput, unknown, AccountFormOutput>({
+    resolver: zodResolver(accountFormSchema),
+    defaultValues: {
+      name: account?.name ?? '',
+      type: account?.type as AccountType | undefined,
+      balance: account ? centsToInput(account.initialBalance) : ''
+    }
+  })
 
   const create = useMutation(orpc.accounts.create.mutationOptions())
   const update = useMutation(orpc.accounts.update.mutationOptions())
   const pending = create.isPending || update.isPending
 
-  function handleSubmit(event: React.FormEvent): void {
-    event.preventDefault()
-
-    const trimmedName = name.trim()
-    if (trimmedName === '' || type === null) return
-
-    const initialBalance = parseEurToCents(balance)
-    if (initialBalance === null) {
-      setBalanceError(true)
-      return
-    }
-
+  const onSubmit = (values: AccountFormOutput): void => {
     const onSuccess = (saved: Account): void => {
       void queryClient.invalidateQueries({ queryKey: orpc.accounts.key() })
       toast.success(account ? t.toast.updated(saved.name) : t.toast.created(saved.name))
@@ -102,19 +121,31 @@ function AccountForm({
 
     if (account) {
       update.mutate(
-        { id: account.id, name: trimmedName, type, initialBalance },
-        { onSuccess, onError: () => toast.error(t.toast.updateError) }
+        { id: account.id, name: values.name, type: values.type, initialBalance: values.balance },
+        {
+          onSuccess,
+          onError: (error) => {
+            console.log(error)
+            return toast.error(t.toast.updateError)
+          }
+        }
       )
     } else {
       create.mutate(
-        { name: trimmedName, type, initialBalance },
-        { onSuccess, onError: () => toast.error(t.toast.createError) }
+        { name: values.name, type: values.type, initialBalance: values.balance },
+        {
+          onSuccess,
+          onError: (error) => {
+            console.log(error)
+            return toast.error(t.toast.createError)
+          }
+        }
       )
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6" noValidate>
       <DialogHeader>
         <DialogTitle>{isEdit ? t.form.editTitle : t.form.createTitle}</DialogTitle>
         <DialogDescription>
@@ -127,33 +158,45 @@ function AccountForm({
           <Label htmlFor="account-name">{t.form.nameLabel}</Label>
           <Input
             id="account-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
             placeholder={t.form.namePlaceholder}
             maxLength={100}
             autoFocus
-            required
+            aria-invalid={errors.name !== undefined}
+            {...register('name')}
           />
+          {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="account-type">{t.form.typeLabel}</Label>
-          <Select
-            items={typeItems}
-            value={type}
-            onValueChange={(value) => setType(value as AccountType)}
-          >
-            <SelectTrigger id="account-type" className="w-full">
-              <SelectValue placeholder={t.form.typePlaceholder} />
-            </SelectTrigger>
-            <SelectContent>
-              {ACCOUNT_TYPES.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {t.types[value]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Controller
+            control={control}
+            name="type"
+            render={({ field }) => (
+              <Select
+                items={typeItems}
+                value={field.value ?? null}
+                onValueChange={(value) => field.onChange(value)}
+              >
+                <SelectTrigger
+                  id="account-type"
+                  className="w-full"
+                  aria-invalid={errors.type !== undefined}
+                  onBlur={field.onBlur}
+                >
+                  <SelectValue placeholder={t.form.typePlaceholder} />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACCOUNT_TYPES.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {t.types[value]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {errors.type && <p className="text-xs text-destructive">{errors.type.message}</p>}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -162,16 +205,16 @@ function AccountForm({
             id="account-balance"
             type="text"
             inputMode="decimal"
-            value={balance}
-            onChange={(e) => {
-              setBalance(e.target.value)
-              setBalanceError(false)
-            }}
             placeholder={t.form.initialBalancePlaceholder}
-            aria-invalid={balanceError}
+            aria-invalid={errors.balance !== undefined}
+            {...register('balance')}
           />
-          <p className="text-xs text-muted-foreground">
-            {balanceError ? t.form.invalidBalance : t.form.initialBalanceHint}
+          <p
+            className={
+              errors.balance ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'
+            }
+          >
+            {errors.balance ? errors.balance.message : t.form.initialBalanceHint}
           </p>
         </div>
       </div>
@@ -180,7 +223,7 @@ function AccountForm({
         <DialogClose render={<Button type="button" variant="outline" />}>
           {t.form.cancel}
         </DialogClose>
-        <Button type="submit" disabled={pending || name.trim() === '' || type === null}>
+        <Button type="submit" disabled={pending}>
           {isEdit ? t.form.submitEdit : t.form.submitCreate}
         </Button>
       </DialogFooter>

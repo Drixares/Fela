@@ -46,6 +46,8 @@ export const strings = {
       submitCreate: 'Créer le compte',
       submitEdit: 'Enregistrer',
       cancel: 'Annuler',
+      nameRequired: 'Le nom est requis.',
+      typeRequired: 'Choisissez un type.',
       invalidBalance: 'Solde initial invalide.'
     },
     archiveDialog: {
