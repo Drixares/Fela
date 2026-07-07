@@ -140,6 +140,67 @@ export const strings = {
       categoryDeleteError: 'Impossible de supprimer la catégorie.'
     }
   },
+  transactions: {
+    title: 'Transactions',
+    empty: 'Aucune transaction pour l’instant.',
+    emptyHint: 'Saisissez un mouvement — une dépense en espèces, un virement reçu…',
+    emptyNoAccounts: 'Créez d’abord un compte pour pouvoir saisir des transactions.',
+    count: (n: number) => `${n} transaction${n > 1 ? 's' : ''}`,
+    add: 'Ajouter une transaction',
+    edit: 'Modifier',
+    delete: 'Supprimer',
+    allAccounts: 'Tous les comptes',
+    filterLabel: 'Compte',
+    noPayee: 'Sans libellé',
+    noCategory: 'Sans catégorie',
+    // French labels for the two directions a manual amount can take.
+    directions: {
+      expense: 'Dépense',
+      income: 'Revenu'
+    },
+    form: {
+      createTitle: 'Nouvelle transaction',
+      createDescription: 'Enregistrez un mouvement absent de vos imports : espèces, oubli…',
+      editTitle: 'Modifier la transaction',
+      editDescription: 'Corrigez le compte, le montant, la date ou le classement de ce mouvement.',
+      accountLabel: 'Compte',
+      accountPlaceholder: 'Choisir un compte',
+      directionLabel: 'Sens',
+      amountLabel: 'Montant (€)',
+      amountPlaceholder: '0,00',
+      dateLabel: 'Date',
+      payeeLabel: 'Libellé',
+      payeePlaceholder: 'Carrefour, Employeur…',
+      categoryLabel: 'Catégorie',
+      categoryPlaceholder: 'Choisir une catégorie',
+      noCategory: 'Sans catégorie',
+      noteLabel: 'Note',
+      notePlaceholder: 'Facultatif',
+      submitCreate: 'Créer la transaction',
+      submitEdit: 'Enregistrer',
+      cancel: 'Annuler',
+      accountRequired: 'Choisissez un compte.',
+      amountRequired: 'Le montant est requis.',
+      amountInvalid: 'Montant invalide.',
+      amountPositive: 'Le montant doit être supérieur à zéro.',
+      dateRequired: 'La date est requise.'
+    },
+    deleteDialog: {
+      title: 'Supprimer cette transaction ?',
+      description: (label: string, amount: string) =>
+        `« ${label} » (${amount}) sera définitivement supprimée et le solde du compte recalculé.`,
+      confirm: 'Supprimer',
+      cancel: 'Annuler'
+    },
+    toast: {
+      created: 'Transaction enregistrée.',
+      updated: 'Transaction modifiée.',
+      deleted: 'Transaction supprimée.',
+      createError: 'Impossible d’enregistrer la transaction.',
+      updateError: 'Impossible d’enregistrer les modifications.',
+      deleteError: 'Impossible de supprimer la transaction.'
+    }
+  },
   backups: {
     title: 'Sauvegardes',
     description:

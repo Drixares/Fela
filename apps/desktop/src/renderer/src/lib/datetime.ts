@@ -9,9 +9,40 @@ const dateTimeFormatter = new Intl.DateTimeFormat('fr-FR', {
   timeStyle: 'short'
 })
 
+const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
+  dateStyle: 'medium'
+})
+
 /** Format an epoch-milliseconds instant as a French date and time. */
 export function formatDateTime(epochMs: number): string {
   return dateTimeFormatter.format(new Date(epochMs))
+}
+
+/** Format a date as a French day-only string, e.g. « 1 mars 2026 ». */
+export function formatDate(date: Date): string {
+  return dateFormatter.format(date)
+}
+
+/**
+ * A date as `yyyy-mm-dd` in the local timezone — the value a native
+ * `<input type="date">` expects. Built from the local parts (not `toISOString`,
+ * which is UTC and can shift the day across midnight).
+ */
+export function toDateInputValue(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+/**
+ * Parse a `yyyy-mm-dd` input value into a local `Date` at midnight. Built from
+ * the parts rather than `new Date(value)`, which would read the string as UTC
+ * and land on the previous day in negative-offset zones.
+ */
+export function fromDateInputValue(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day)
 }
 
 /** Format a byte count as a short human-readable size, e.g. `1 536` → « 1,5 Ko ». */
