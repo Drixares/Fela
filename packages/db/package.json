@@ -5,9 +5,10 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/schema.ts"
+    "./schema": "./src/schema/index.ts"
   },
   "scripts": {
+    "db:generate": "node drizzle.mjs generate",
     "db:push": "node drizzle.mjs push",
     "db:studio": "node drizzle.mjs studio",
     "lint": "eslint . --max-warnings 0",

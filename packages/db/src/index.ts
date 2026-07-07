@@ -1,5 +1,8 @@
+import { fileURLToPath } from "node:url";
+
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "./schema";
 
 /**
@@ -8,7 +11,8 @@ import * as schema from "./schema";
  *
  * The caller owns the file location — in the Electron app this is
  * `app.getPath("userData")` — so this package stays free of any Electron or
- * environment coupling.
+ * environment coupling. Pass `":memory:"` for a throwaway database (used by the
+ * test fixture).
  */
 export function createDb(path: string) {
   const sqlite = new Database(path);
@@ -21,5 +25,24 @@ export function createDb(path: string) {
 
 export type Db = ReturnType<typeof createDb>;
 
-export { messages } from "./schema";
-export type { Message, NewMessage } from "./schema";
+/**
+ * Apply every generated migration to `db`, bringing an empty database up to the
+ * current schema. Idempotent — drizzle tracks applied migrations in its own
+ * table, so re-running is a no-op.
+ *
+ * The migration SQL lives in this package's `drizzle/` folder, generated from
+ * `schema/` with `pnpm --filter @repo/db db:generate`. The test fixture calls
+ * this against a `:memory:` database to get a migrated context.
+ */
+export function migrateToLatest(db: Db): void {
+  const migrationsFolder = fileURLToPath(
+    new URL("../drizzle", import.meta.url)
+  );
+  migrate(db, { migrationsFolder });
+}
+
+export * from "./schema";
+
+export { getAccountBalance, getAccountBalances } from "./balances";
+export { createTransfer, getTransfer } from "./transfers";
+export type { Transfer, TransferInput } from "./transfers";

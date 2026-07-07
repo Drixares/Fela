@@ -1,50 +1,39 @@
-import { Button, buttonVariants } from '@repo/ui/components/button'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import electronLogo from './assets/electron.svg'
 import Versions from './components/Versions'
 import { client } from './lib/orpc'
+import { strings } from './lib/strings'
 
 function App(): React.JSX.Element {
-  const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
+  const [accountCount, setAccountCount] = useState<number | null>(null)
 
-  const [receivedAt, setReceivedAt] = useState<string | null>(null)
-
-  const logOnServer = async (): Promise<void> => {
-    const { createdAt } = await client.messages.add({ content: 'Hello from renderer' })
-    setReceivedAt(createdAt.toISOString())
-  }
+  useEffect(() => {
+    client.accounts
+      .list()
+      .then((accounts) => setAccountCount(accounts.length))
+      .catch((error) => console.error(error))
+  }, [])
 
   return (
-    <>
-      <img alt="logo" className="logo" src={electronLogo} />
-      <div className="creator">Powered by electron-vite</div>
-      <div className="text">
-        Build an Electron app with <span className="react">React</span>
-        &nbsp;and <span className="ts">TypeScript</span>
-      </div>
-      <p className="tip">
-        Please try pressing <code>F12</code> to open the devTool
-      </p>
-      <div className="mt-4 flex items-center gap-3">
-        <Button onClick={ipcHandle}>Send IPC</Button>
+    <main className="mx-auto flex max-w-md flex-col gap-6 p-8">
+      <header>
+        <h1 className="text-2xl font-semibold">{strings.app.name}</h1>
+        <p className="text-muted-foreground">{strings.app.tagline}</p>
+      </header>
 
-        <Button variant="secondary" onClick={logOnServer}>
-          Log on server
-        </Button>
+      <section className="flex flex-col gap-1">
+        <h2 className="text-sm font-medium uppercase tracking-wide">{strings.accounts.title}</h2>
+        <p className="text-muted-foreground">
+          {accountCount === null
+            ? strings.accounts.loading
+            : accountCount === 0
+              ? strings.accounts.empty
+              : strings.accounts.count(accountCount)}
+        </p>
+      </section>
 
-        <a
-          href="https://electron-vite.org/"
-          target="_blank"
-          rel="noreferrer"
-          className={buttonVariants({ variant: 'outline' })}
-        >
-          Documentation
-        </a>
-      </div>
-      {receivedAt && <p className="tip">Server received at {receivedAt}</p>}
-      <Versions></Versions>
-    </>
+      <Versions />
+    </main>
   )
 }
 

@@ -8,6 +8,7 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "checks": "turbo run check-types",
+    "test": "turbo run test",
     "prepare": "husky",
     "db:push": "pnpm --filter @repo/db db:push",
     "db:studio": "pnpm --filter @repo/db db:studio"
