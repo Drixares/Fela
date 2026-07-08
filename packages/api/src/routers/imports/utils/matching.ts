@@ -43,6 +43,16 @@ export function loadApplicableRules(db: Reader): ApplicableRule[] {
 }
 
 /**
+ * Whether a rule's `pattern` matches a `label` — a case-insensitive substring
+ * test. Named once so import classification (below) and retroactive
+ * application (issue #15) can never drift on what « le libellé contient X »
+ * means.
+ */
+export function patternMatches(label: string, pattern: string): boolean {
+  return label.toLowerCase().includes(pattern.toLowerCase());
+}
+
+/**
  * The category the ordered rules assign to an incoming label, or `null` when
  * no rule matches. "Contains" is case-insensitive — bank labels shout in
  * inconsistent case — and the FIRST matching rule wins, so overlapping
@@ -52,9 +62,8 @@ export function categorize(
   label: string,
   rules: ApplicableRule[]
 ): ApplicableRule | null {
-  const haystack = label.toLowerCase();
   for (const rule of rules) {
-    if (haystack.includes(rule.pattern.toLowerCase())) {
+    if (patternMatches(label, rule.pattern)) {
       return rule;
     }
   }

@@ -21,6 +21,10 @@ import {
   listTransactionsBase,
   listTransactionsHandler,
 } from "./queries/list-transactions.js";
+import {
+  suggestCategoriesBase,
+  suggestCategoriesHandler,
+} from "./queries/suggest-categories.js";
 
 /**
  * Transaction procedures — manual ledger entry (see the V1 PRD, #1, and issue
@@ -33,6 +37,12 @@ export const transactionsRouter = base.router({
   list: listTransactionsBase.handler(async ({ context, input }) => {
     return await call(listTransactionsHandler, input, { context });
   }),
+
+  suggestCategories: suggestCategoriesBase.handler(
+    async ({ context, input }) => {
+      return await call(suggestCategoriesHandler, input, { context });
+    }
+  ),
 
   bulkCategorize: bulkCategorizeBase.handler(async ({ context, input }) => {
     return await call(bulkCategorizeHandler, input, { context });

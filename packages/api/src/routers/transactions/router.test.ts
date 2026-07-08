@@ -894,3 +894,135 @@ test("transactions.list direction filter keeps only outflows or only inflows", a
   expect(inflows.sum).toBe(250_000);
   expect(inflows.transactions.every((t) => t.amount > 0)).toBe(true);
 });
+
+// ── History-based category suggestion (issue #15) ──
+
+/** File one transaction under a category — a fixture for the suggestion tests. */
+async function record(
+  context: ServerContext,
+  accountId: number,
+  payee: string,
+  categoryId: number | null,
+  date = new Date("2026-03-01")
+): Promise<void> {
+  await call(
+    appRouter.transactions.create,
+    { accountId, amount: -1_000, date, payee, categoryId },
+    { context }
+  );
+}
+
+test("transactions.suggestCategories proposes the last category used for a known payee", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const transport = await makeCategory(context, "Transport");
+  await record(context, accountId, "SNCF", transport);
+
+  const suggestions = await call(
+    appRouter.transactions.suggestCategories,
+    { payees: ["SNCF"] },
+    { context }
+  );
+
+  expect(suggestions).toEqual([
+    { payee: "SNCF", category: { id: transport, name: "Transport" } },
+  ]);
+});
+
+test("transactions.suggestCategories returns the most recent category when a payee was filed twice", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const transport = await makeCategory(context, "Transport");
+  const travel = await makeCategory(context, "Voyages");
+  await record(context, accountId, "SNCF", transport, new Date("2026-01-01"));
+  await record(context, accountId, "SNCF", travel, new Date("2026-05-01"));
+
+  const suggestions = await call(
+    appRouter.transactions.suggestCategories,
+    { payees: ["SNCF"] },
+    { context }
+  );
+
+  expect(suggestions).toEqual([
+    { payee: "SNCF", category: { id: travel, name: "Voyages" } },
+  ]);
+});
+
+test("transactions.suggestCategories matches a payee ignoring case and surrounding whitespace", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const transport = await makeCategory(context, "Transport");
+  await record(context, accountId, "SNCF", transport);
+
+  const suggestions = await call(
+    appRouter.transactions.suggestCategories,
+    { payees: ["  sncf  "] },
+    { context }
+  );
+
+  // The suggestion echoes the payee as asked, so the caller can key by it.
+  expect(suggestions).toEqual([
+    { payee: "  sncf  ", category: { id: transport, name: "Transport" } },
+  ]);
+});
+
+test("transactions.suggestCategories stays silent for a payee a rule already claims", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const transport = await makeCategory(context, "Transport");
+  const travel = await makeCategory(context, "Voyages");
+  // History says SNCF → Voyages, but a rule now claims SNCF → Transport.
+  await record(context, accountId, "SNCF", travel);
+  await call(
+    appRouter.rules.create,
+    { pattern: "SNCF", categoryId: transport },
+    { context }
+  );
+
+  // « sans règle » only: the rule, not the history, must classify SNCF.
+  const suggestions = await call(
+    appRouter.transactions.suggestCategories,
+    { payees: ["SNCF"] },
+    { context }
+  );
+  expect(suggestions).toEqual([]);
+});
+
+test("transactions.suggestCategories offers nothing for a payee never filed under a category", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  await record(context, accountId, "SNCF", null);
+
+  const suggestions = await call(
+    appRouter.transactions.suggestCategories,
+    { payees: ["SNCF", "INCONNU"] },
+    { context }
+  );
+
+  expect(suggestions).toEqual([]);
+});
+
+test("transactions.suggestCategories never suggests from a transfer leg", async () => {
+  const context = createTestContext();
+  const source = await makeAccount(context, "Courant");
+  const destination = await makeAccount(context, "Livret");
+  await call(
+    appRouter.transfers.create,
+    {
+      fromAccountId: source,
+      toAccountId: destination,
+      amount: 5_000,
+      date: new Date("2026-03-01"),
+      payee: "Virement épargne",
+    },
+    { context }
+  );
+
+  const suggestions = await call(
+    appRouter.transactions.suggestCategories,
+    { payees: ["Virement épargne"] },
+    { context }
+  );
+
+  expect(suggestions).toEqual([]);
+});

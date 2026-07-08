@@ -65,3 +65,13 @@ export const bulkCategorizeSchema = z.object({
   ids: z.array(idSchema).min(1),
   categoryId: idSchema.nullable(),
 });
+
+/**
+ * The payees to propose a history-based category for (issue #15). The list
+ * passes the payees currently on screen; the procedure answers only those with
+ * a categorised history, echoing each payee back so the caller keys its rows by
+ * their own string.
+ */
+export const suggestCategoriesSchema = z.object({
+  payees: z.array(z.string().min(1)).max(1000),
+});

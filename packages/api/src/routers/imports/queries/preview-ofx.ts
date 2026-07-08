@@ -1,5 +1,9 @@
 import { base } from "src/context";
 
+import {
+  lastCategoryByPayee,
+  suggestionFor,
+} from "../../transactions/utils/last-category-by-payee";
 import { assertAccountExists } from "../utils/assert-account-exists";
 import { flagOfxAgainstStored } from "../utils/flag-ofx-against-stored";
 import { announcedCategory, loadApplicableRules } from "../utils/matching";
@@ -25,16 +29,24 @@ export const previewOfxHandler = previewOfxBase.handler(
     // commit, name for the screen — so the user corrects the classification
     // before validating rather than after.
     const rules = loadApplicableRules(context.db);
+    // For rows no rule matches, propose the last category used for that payee
+    // (issue #15). The incoming label is what a committed row's payee becomes,
+    // so it is the lookup key; the rule takes precedence (see `suggestionFor`).
+    const suggestions = lastCategoryByPayee(context.db);
     return {
       // Explicit payload (not the internal FlaggedOfxRow) — the FITID is an
       // implementation detail, and the renderer only renders these fields.
-      rows: flagged.map((row) => ({
-        date: row.date,
-        amount: row.amount,
-        label: row.label,
-        duplicate: row.duplicate,
-        category: announcedCategory(row.label, rules),
-      })),
+      rows: flagged.map((row) => {
+        const category = announcedCategory(row.label, rules);
+        return {
+          date: row.date,
+          amount: row.amount,
+          label: row.label,
+          duplicate: row.duplicate,
+          category,
+          suggestion: suggestionFor(suggestions, row.label, category),
+        };
+      }),
       newCount: flagged.length - duplicateCount,
       duplicateCount,
     };

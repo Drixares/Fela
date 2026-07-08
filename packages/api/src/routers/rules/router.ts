@@ -1,6 +1,10 @@
 import { call } from "@orpc/server";
 
 import { base } from "../../context.js";
+import {
+  applyRetroactiveBase,
+  applyRetroactiveHandler,
+} from "./mutations/apply-retroactive.js";
 import { createRuleBase, createRuleHandler } from "./mutations/create-rule.js";
 import { deleteRuleBase, deleteRuleHandler } from "./mutations/delete-rule.js";
 import {
@@ -9,6 +13,10 @@ import {
 } from "./mutations/reorder-rules.js";
 import { updateRuleBase, updateRuleHandler } from "./mutations/update-rule.js";
 import { listRulesHandler } from "./queries/list-rules.js";
+import {
+  matchingCountBase,
+  matchingCountHandler,
+} from "./queries/matching-count.js";
 
 /**
  * Categorization-rule procedures (see issue #13): « si le libellé contient X
@@ -36,5 +44,15 @@ export const rulesRouter = base.router({
 
   reorder: reorderRulesBase.handler(async ({ context, input }) => {
     return await call(reorderRulesHandler, input, { context });
+  }),
+
+  // Retroactive application (issue #15): how many existing rows a pattern would
+  // reclassify, and — on explicit demand only — the reclassification itself.
+  matchingCount: matchingCountBase.handler(async ({ context, input }) => {
+    return await call(matchingCountHandler, input, { context });
+  }),
+
+  applyRetroactive: applyRetroactiveBase.handler(async ({ context, input }) => {
+    return await call(applyRetroactiveHandler, input, { context });
   }),
 });
