@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Alert, AlertDescription } from '@repo/ui/components/alert'
 import { Badge } from '@repo/ui/components/badge'
 import { Button } from '@repo/ui/components/button'
+import { Checkbox } from '@repo/ui/components/checkbox'
 import {
   Dialog,
   DialogClose,
@@ -21,7 +22,7 @@ import {
 } from '@repo/ui/components/select'
 import { toast } from '@repo/ui/components/sonner'
 import { useQueryClient } from '@tanstack/react-query'
-import { FileUpIcon } from 'lucide-react'
+import { ChevronRightIcon, FileUpIcon } from 'lucide-react'
 
 import { formatDate } from '../../lib/datetime'
 import { formatEur } from '../../lib/money'
@@ -84,6 +85,12 @@ function refusalMessage(error: unknown): string {
   return t.dialog.refused(error instanceof Error ? error.message : String(error))
 }
 
+/** One movement as `date · amount · label` — a duplicate row and its stored
+ * match are shown side by side in this same shape so they read as comparable. */
+function formatMovement(m: { date: string | Date; amount: number; label: string }): string {
+  return `${formatDate(new Date(m.date))} · ${formatEur(m.amount)} · ${m.label}`
+}
+
 function ImportFlow({
   accounts,
   defaultAccountId,
@@ -111,6 +118,27 @@ function ImportFlow({
   // one" — the procedures resolve it server-side.
   const [mapping, setMapping] = useState<ColumnMapping | undefined>(undefined)
   const [preview, setPreview] = useState<ImportPreview | null>(null)
+
+  // Preview-step choices, keyed by CSV line: which probable duplicates the user
+  // unfolded to inspect, and which they judged false positives and forced in.
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [forced, setForced] = useState<Set<number>>(new Set())
+
+  /** Show a freshly computed preview, dropping any expand/force choices made
+   * against the previous one (their line numbers no longer apply). */
+  function showPreview(next: ImportPreview): void {
+    setPreview(next)
+    setExpanded(new Set())
+    setForced(new Set())
+  }
+
+  /** Flip one line in a line-keyed set (expand/collapse, force/unforce). */
+  function toggleLine(set: Set<number>, line: number, on: boolean): Set<number> {
+    const next = new Set(set)
+    if (on) next.add(line)
+    else next.delete(line)
+    return next
+  }
 
   const accountId = Number(accountValue)
   const accountItems: Record<string, string> = Object.fromEntries(
@@ -148,7 +176,7 @@ function ImportFlow({
       const stored = await client.imports.getMapping({ accountId })
       if (stored) {
         setMapping(undefined)
-        setPreview(await client.imports.preview({ accountId, content: file.content }))
+        showPreview(await client.imports.preview({ accountId, content: file.content }))
         setStep('preview')
         return
       }
@@ -178,7 +206,7 @@ function ImportFlow({
       return
     }
     void run(async () => {
-      setPreview(
+      showPreview(
         await client.imports.preview({ accountId, content: file.content, mapping: chosen })
       )
       setMapping(chosen)
@@ -189,7 +217,12 @@ function ImportFlow({
   function commit(): void {
     if (!file) return
     void run(async () => {
-      const result = await client.imports.commit({ accountId, content: file.content, mapping })
+      const result = await client.imports.commit({
+        accountId,
+        content: file.content,
+        mapping,
+        forceLines: [...forced]
+      })
       void queryClient.invalidateQueries({ queryKey: orpc.transactions.key() })
       void queryClient.invalidateQueries({ queryKey: orpc.accounts.key() })
       toast.success(t.toast.imported(result.imported))
@@ -316,30 +349,79 @@ function ImportFlow({
             {t.preview.summary(preview.newCount, preview.duplicateCount)}
           </p>
           <ul className="max-h-56 divide-y divide-border overflow-y-auto rounded-md border">
-            {preview.rows.map((row) => (
-              <li
-                key={row.line}
-                className={`flex items-center justify-between gap-3 px-3 py-2 text-sm ${
-                  row.duplicate ? 'opacity-50' : ''
-                }`}
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate">{row.label}</span>
-                  {row.duplicate && (
-                    <Badge variant="outline" className="shrink-0">
-                      {t.preview.duplicateBadge}
-                    </Badge>
+            {preview.rows.map((row) => {
+              const isForced = forced.has(row.line)
+              const isExpanded = expanded.has(row.line)
+              // Dim only probable duplicates that will be skipped — a forced one
+              // is entering the ledger, so it reads at full strength.
+              const dimmed = row.duplicate && !isForced
+              return (
+                <li key={row.line} className="text-sm">
+                  <div
+                    className={`flex items-center justify-between gap-3 px-3 py-2 ${
+                      dimmed ? 'opacity-60' : ''
+                    }`}
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      {row.duplicate ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpanded((set) => toggleLine(set, row.line, !isExpanded))
+                          }
+                          aria-expanded={isExpanded}
+                          className="flex min-w-0 items-center gap-1.5 text-left hover:underline"
+                        >
+                          <ChevronRightIcon
+                            className={`size-4 shrink-0 text-muted-foreground transition-transform ${
+                              isExpanded ? 'rotate-90' : ''
+                            }`}
+                          />
+                          <span className="truncate">{row.label}</span>
+                        </button>
+                      ) : (
+                        <span className="truncate">{row.label}</span>
+                      )}
+                      {row.duplicate && (
+                        <Badge variant={isForced ? 'default' : 'outline'} className="shrink-0">
+                          {isForced ? t.preview.forcedBadge : t.preview.duplicateBadge}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3 text-muted-foreground">
+                      <span>{formatDate(new Date(row.date))}</span>
+                      <span className="font-medium tabular-nums text-foreground">
+                        {formatEur(row.amount)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {row.duplicate && isExpanded && row.existing && (
+                    <div className="flex flex-col gap-2.5 border-t bg-muted/30 px-3 py-2.5 pl-[2.125rem]">
+                      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                        <dt className="text-muted-foreground">{t.preview.importedRowLabel}</dt>
+                        <dd className="tabular-nums">{formatMovement(row)}</dd>
+                        <dt className="text-muted-foreground">{t.preview.existingRowLabel}</dt>
+                        <dd className="tabular-nums">{formatMovement(row.existing)}</dd>
+                      </dl>
+                      <label className="flex items-center gap-2 text-xs">
+                        <Checkbox
+                          checked={isForced}
+                          onCheckedChange={(checked) =>
+                            setForced((set) => toggleLine(set, row.line, checked === true))
+                          }
+                        />
+                        {t.preview.forceLabel}
+                      </label>
+                    </div>
                   )}
-                </div>
-                <div className="flex shrink-0 items-center gap-3 text-muted-foreground">
-                  <span>{formatDate(new Date(row.date))}</span>
-                  <span className="font-medium tabular-nums text-foreground">
-                    {formatEur(row.amount)}
-                  </span>
-                </div>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
+          {preview.duplicateCount > 0 && (
+            <p className="text-xs text-muted-foreground">{t.preview.duplicateHint}</p>
+          )}
         </div>
       )}
 
@@ -374,7 +456,7 @@ function ImportFlow({
         )}
         {step === 'preview' && preview && (
           <Button type="button" disabled={busy} onClick={commit}>
-            {t.preview.submit(preview.newCount)}
+            {t.preview.submit(preview.newCount + forced.size)}
           </Button>
         )}
       </DialogFooter>

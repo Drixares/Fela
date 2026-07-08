@@ -60,25 +60,47 @@ export function fingerprintOf(accountId: number, row: ImportRow): string {
 }
 
 /**
- * Tag each row as new or probable duplicate, given how many stored rows
- * already carry each fingerprint. Multiset semantics: a fingerprint stored N
- * times absorbs only the file's first N occurrences, so two genuinely
- * identical movements in one file (two coffees, same day, same price) both
- * import — yet re-importing that same file later skips both.
+ * A stored transaction a probable duplicate collided with — the date, amount
+ * and (as-stored) label the preview shows so the user can judge the collision
+ * before choosing to force the import.
  */
-export function flagDuplicates(
+export interface ExistingMatch {
+  date: Date;
+  amount: number;
+  label: string;
+}
+
+/** A flagged row carrying, for a probable duplicate, the stored transaction it
+ * collided with — `null` when the row is new. */
+export interface MatchedRow extends FlaggedRow {
+  existing: ExistingMatch | null;
+}
+
+/**
+ * Tag each row as new or probable duplicate, pairing each duplicate with the
+ * stored transaction it collided with so the preview can show the user what
+ * they'd be skipping. Multiset semantics: `storedByFingerprint` holds each
+ * fingerprint's stored matches as a queue, and the file's first occurrences
+ * consume them in order — so a fingerprint stored N times absorbs only the
+ * file's first N occurrences (two genuinely identical movements in one file,
+ * two coffees same day same price, both import), yet re-importing that same
+ * file later skips them all.
+ */
+export function flagWithMatches(
   accountId: number,
   rows: ImportRow[],
-  storedCounts: Map<string, number>
-): FlaggedRow[] {
-  const remaining = new Map(storedCounts);
+  storedByFingerprint: Map<string, ExistingMatch[]>
+): MatchedRow[] {
+  const remaining = new Map(
+    [...storedByFingerprint].map(([fingerprint, matches]) => [
+      fingerprint,
+      [...matches],
+    ])
+  );
   return rows.map((row) => {
     const fingerprint = fingerprintOf(accountId, row);
-    const stored = remaining.get(fingerprint) ?? 0;
-    if (stored > 0) {
-      remaining.set(fingerprint, stored - 1);
-    }
-    return { ...row, fingerprint, duplicate: stored > 0 };
+    const existing = remaining.get(fingerprint)?.shift() ?? null;
+    return { ...row, fingerprint, duplicate: existing !== null, existing };
   });
 }
 

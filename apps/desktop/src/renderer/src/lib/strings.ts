@@ -266,6 +266,14 @@ export const strings = {
         `${added} nouvelle${added > 1 ? 's' : ''} transaction${added > 1 ? 's' : ''}, ` +
         `${duplicates} doublon${duplicates > 1 ? 's' : ''} probable${duplicates > 1 ? 's' : ''} ignoré${duplicates > 1 ? 's' : ''}.`,
       duplicateBadge: 'Doublon probable',
+      forcedBadge: 'Forcé',
+      // A hint below the list when at least one probable duplicate is shown.
+      duplicateHint:
+        'Dépliez un doublon probable pour le comparer à la transaction existante, et forcez-le si c’en est un vrai.',
+      importedRowLabel: 'Cette ligne',
+      existingRowLabel: 'Transaction existante',
+      forceLabel: 'Importer quand même (ce n’est pas un doublon)',
+      // Count reflects new rows plus the probable duplicates the user forced.
       submit: (added: number) => `Importer ${added} transaction${added > 1 ? 's' : ''}`
     },
     toast: {

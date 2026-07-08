@@ -369,6 +369,130 @@ test("the memorised mapping is reused when the next import sends none", async ()
   ).rejects.toThrow(/mapping/i);
 });
 
+test("forcing a probable duplicate imports it exactly once, and a later re-import does not duplicate it", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  // First import stores the three rows.
+  await call(
+    appRouter.imports.commit,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+
+  // Re-import the same file: all three collide with the stored fingerprints and
+  // are flagged as probable duplicates. The user judges the first (CARREFOUR,
+  // CSV line 2) a false positive — two genuinely distinct movements the
+  // heuristic can't tell apart — and forces it in.
+  const forced = await call(
+    appRouter.imports.commit,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING, forceLines: [2] },
+    { context }
+  );
+  expect(forced).toEqual({ imported: 1, duplicates: 2 });
+
+  // The forced row entered the ledger exactly once — alongside the original,
+  // that is two CARREFOUR rows, no more.
+  let list = await call(
+    appRouter.transactions.list,
+    { accountId },
+    { context }
+  );
+  expect(list.transactions.filter((t) => t.payee === "CARREFOUR")).toHaveLength(
+    2
+  );
+
+  // A later re-import with no forcing must not duplicate it again: its
+  // fingerprint is now stored twice, so the multiset absorbs the file's single
+  // occurrence and skips it like the other two.
+  const again = await call(
+    appRouter.imports.commit,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+  expect(again).toEqual({ imported: 0, duplicates: 3 });
+
+  list = await call(appRouter.transactions.list, { accountId }, { context });
+  expect(list.transactions.filter((t) => t.payee === "CARREFOUR")).toHaveLength(
+    2
+  );
+});
+
+test("an unforced probable duplicate stays ignored even when another on the same import is forced", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  await call(
+    appRouter.imports.commit,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+
+  // Force only CARREFOUR (line 2); the other two duplicates stay ignored.
+  const result = await call(
+    appRouter.imports.commit,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING, forceLines: [2] },
+    { context }
+  );
+  expect(result).toEqual({ imported: 1, duplicates: 2 });
+
+  const list = await call(
+    appRouter.transactions.list,
+    { accountId },
+    { context }
+  );
+  // VIREMENT and BOULANGERIE were not forced: still one of each.
+  expect(
+    list.transactions.filter((t) => t.payee === "VIREMENT EMPLOYEUR")
+  ).toHaveLength(1);
+  expect(
+    list.transactions.filter((t) => t.payee === "BOULANGERIE PAUL")
+  ).toHaveLength(1);
+});
+
+test("imports.preview attaches the matching stored transaction to each probable duplicate", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  await call(
+    appRouter.imports.commit,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+
+  // A second export overlaps: the first row repeats CARREFOUR with a cosmetic
+  // label difference (case, spacing) the normalised fingerprint sees through;
+  // the second is genuinely new.
+  const overlapping = [
+    "Date;Montant;Libellé",
+    "01/03/2026;-25,50;Carrefour",
+    "06/03/2026;-3,40;FRANPRIX",
+  ].join("\n");
+
+  const preview = await call(
+    appRouter.imports.preview,
+    { accountId, content: overlapping, mapping: BANK_MAPPING },
+    { context }
+  );
+
+  expect(preview.newCount).toBe(1);
+  expect(preview.duplicateCount).toBe(1);
+
+  const duplicate = preview.rows.find((row) => row.duplicate);
+  expect(duplicate).toBeDefined();
+  // The matching stored transaction is surfaced so the user can judge the
+  // collision — it carries the label as it was stored, not the file's wording.
+  expect(duplicate?.existing).toMatchObject({
+    date: new Date("2026-03-01"),
+    amount: -2_550,
+    label: "CARREFOUR",
+  });
+
+  // A row that is not a duplicate carries no existing match.
+  const fresh = preview.rows.find((row) => !row.duplicate);
+  expect(fresh?.existing).toBeNull();
+});
+
 test("imports.inspect returns the headers and sample rows the mapping screen needs", async () => {
   const context = createTestContext();
 
