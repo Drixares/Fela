@@ -1,17 +1,17 @@
 import { ORPCError } from "@orpc/server";
 import { accounts, importMappings, transactions } from "@repo/db";
 import type { Db } from "@repo/db";
-import { and, count, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { base } from "../../context.js";
 import {
   CsvImportError,
-  flagDuplicates,
+  flagWithMatches,
   mapRows,
   parseCsv,
 } from "./csv-import.js";
-import type { FlaggedRow, ImportRow } from "./csv-import.js";
+import type { ExistingMatch, ImportRow, MatchedRow } from "./csv-import.js";
 import { OfxImportError, flagOfxDuplicates, parseOfx } from "./ofx-import.js";
 import type { FlaggedOfxRow, OfxRow } from "./ofx-import.js";
 
@@ -104,16 +104,23 @@ function resolveMapping(
 }
 
 /**
- * Tag each parsed row as new or probable duplicate against the fingerprints
- * already stored on the account (multiset semantics — see `flagDuplicates`).
+ * Tag each parsed row as new or probable duplicate against the account's stored
+ * rows, pairing every probable duplicate with the stored transaction it
+ * collided with (multiset semantics — see `flagWithMatches`). Preview shows the
+ * match so the user can judge each collision; commit only reads the verdict.
  */
-function flagAgainstStored(
+function matchAgainstStored(
   db: Reader,
   accountId: number,
   rows: ImportRow[]
-): FlaggedRow[] {
+): MatchedRow[] {
   const stored = db
-    .select({ fingerprint: transactions.importFingerprint, n: count() })
+    .select({
+      fingerprint: transactions.importFingerprint,
+      date: transactions.date,
+      amount: transactions.amount,
+      label: transactions.payee,
+    })
     .from(transactions)
     .where(
       and(
@@ -121,11 +128,20 @@ function flagAgainstStored(
         isNotNull(transactions.importFingerprint)
       )
     )
-    .groupBy(transactions.importFingerprint)
     .all();
 
-  const counts = new Map(stored.map((row) => [row.fingerprint!, row.n]));
-  return flagDuplicates(accountId, rows, counts);
+  const byFingerprint = new Map<string, ExistingMatch[]>();
+  for (const row of stored) {
+    const match: ExistingMatch = {
+      date: row.date,
+      amount: row.amount,
+      label: row.label ?? "",
+    };
+    const queue = byFingerprint.get(row.fingerprint!);
+    if (queue) queue.push(match);
+    else byFingerprint.set(row.fingerprint!, [match]);
+  }
+  return flagWithMatches(accountId, rows, byFingerprint);
 }
 
 /** Parse the OFX file, surfacing refusals as BAD_REQUEST. */
@@ -204,17 +220,20 @@ export const importsRouter = base.router({
       );
       const rows = readRows(input.content, mapping);
 
-      const flagged = flagAgainstStored(context.db, input.accountId, rows);
+      const flagged = matchAgainstStored(context.db, input.accountId, rows);
       const duplicateCount = flagged.filter((row) => row.duplicate).length;
       return {
-        // Explicit payload (not the internal FlaggedRow) — the fingerprint is
-        // an implementation detail, and the renderer only renders these.
+        // Explicit payload (not the internal MatchedRow) — the fingerprint is
+        // an implementation detail, and the renderer only renders these. Each
+        // probable duplicate carries the stored transaction it collided with,
+        // so the user can unfold it, judge it, and force a false positive in.
         rows: flagged.map((row) => ({
           line: row.line,
           date: row.date,
           amount: row.amount,
           label: row.label,
           duplicate: row.duplicate,
+          existing: row.existing,
         })),
         newCount: flagged.length - duplicateCount,
         duplicateCount,
@@ -233,6 +252,9 @@ export const importsRouter = base.router({
         content: z.string(),
         // Omitted after the first import — the memorised mapping takes over.
         mapping: mappingSchema.optional(),
+        // CSV lines (1-based, as `preview` reports them) the user judged false
+        // positives and chose to import despite the probable-duplicate flag.
+        forceLines: z.array(z.int().positive()).optional(),
       })
     )
     .handler(async ({ context, input }) => {
@@ -243,17 +265,23 @@ export const importsRouter = base.router({
         input.mapping
       );
       const rows = readRows(input.content, mapping);
+      const forced = new Set(input.forceLines ?? []);
 
       return context.db.transaction((tx) => {
         // Flag inside the transaction, against the same snapshot the inserts
         // will see, so a commit racing another write can't double-import.
-        const flagged = flagAgainstStored(tx, input.accountId, rows);
-        const fresh = flagged.filter((row) => !row.duplicate);
+        const flagged = matchAgainstStored(tx, input.accountId, rows);
+        // A row imports when it's new, or when the user forced it despite the
+        // duplicate flag. A forced row enters with its fingerprint, so a later
+        // re-import sees it stored and skips it — it lands exactly once.
+        const toImport = flagged.filter(
+          (row) => !row.duplicate || forced.has(row.line)
+        );
 
-        if (fresh.length > 0) {
+        if (toImport.length > 0) {
           tx.insert(transactions)
             .values(
-              fresh.map((row) => ({
+              toImport.map((row) => ({
                 accountId: input.accountId,
                 amount: row.amount,
                 date: row.date,
@@ -273,8 +301,8 @@ export const importsRouter = base.router({
           .run();
 
         return {
-          imported: fresh.length,
-          duplicates: flagged.length - fresh.length,
+          imported: toImport.length,
+          duplicates: flagged.length - toImport.length,
         };
       });
     }),
