@@ -12,6 +12,8 @@ import {
   parseCsv,
 } from "./csv-import.js";
 import type { FlaggedRow, ImportRow } from "./csv-import.js";
+import { OfxImportError, flagOfxDuplicates, parseOfx } from "./ofx-import.js";
+import type { FlaggedOfxRow, OfxRow } from "./ofx-import.js";
 
 const idSchema = z.int().positive();
 
@@ -35,14 +37,14 @@ function assertAccountExists(db: Db, id: number): void {
 }
 
 /**
- * Run a CSV computation, converting any {@link CsvImportError} into a
+ * Run an import computation, converting any import refusal (CSV or OFX) into a
  * BAD_REQUEST whose message tells the user which line or value was refused.
  */
 function refusing<T>(compute: () => T): T {
   try {
     return compute();
   } catch (error) {
-    if (error instanceof CsvImportError) {
+    if (error instanceof CsvImportError || error instanceof OfxImportError) {
       throw new ORPCError("BAD_REQUEST", { message: error.message });
     }
     throw error;
@@ -124,6 +126,35 @@ function flagAgainstStored(
 
   const counts = new Map(stored.map((row) => [row.fingerprint!, row.n]));
   return flagDuplicates(accountId, rows, counts);
+}
+
+/** Parse the OFX file, surfacing refusals as BAD_REQUEST. */
+function readOfxRows(content: string): OfxRow[] {
+  return refusing(() => parseOfx(content));
+}
+
+/**
+ * Tag each OFX row as new or duplicate against the FITIDs already stored on the
+ * account (set semantics — see `flagOfxDuplicates`).
+ */
+function flagOfxAgainstStored(
+  db: Reader,
+  accountId: number,
+  rows: OfxRow[]
+): FlaggedOfxRow[] {
+  const stored = db
+    .select({ externalId: transactions.importExternalId })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.accountId, accountId),
+        isNotNull(transactions.importExternalId)
+      )
+    )
+    .all();
+
+  const storedIds = new Set(stored.map((row) => row.externalId!));
+  return flagOfxDuplicates(rows, storedIds);
 }
 
 /** How many data rows `inspect` returns for the mapping screen's preview. */
@@ -257,5 +288,72 @@ export const importsRouter = base.router({
     .input(z.object({ accountId: idSchema }))
     .handler(async ({ context, input }) => {
       return storedMapping(context.db, input.accountId);
+    }),
+
+  /**
+   * Dry-run an OFX import (see issue #11): parse the file and report what a
+   * commit would do — without writing anything. No column mapping: OFX carries
+   * its own tags. Duplicates are flagged by FITID against the account's stored
+   * rows. An unreadable file is refused here with the same error a commit gives.
+   */
+  previewOfx: base
+    .input(z.object({ accountId: idSchema, content: z.string() }))
+    .handler(async ({ context, input }) => {
+      assertAccountExists(context.db, input.accountId);
+      const rows = readOfxRows(input.content);
+
+      const flagged = flagOfxAgainstStored(context.db, input.accountId, rows);
+      const duplicateCount = flagged.filter((row) => row.duplicate).length;
+      return {
+        // Explicit payload (not the internal FlaggedOfxRow) — the FITID is an
+        // implementation detail, and the renderer only renders these fields.
+        rows: flagged.map((row) => ({
+          date: row.date,
+          amount: row.amount,
+          label: row.label,
+          duplicate: row.duplicate,
+        })),
+        newCount: flagged.length - duplicateCount,
+        duplicateCount,
+      };
+    }),
+
+  /**
+   * Apply an OFX import (see issue #11): insert the file's new rows on the
+   * account inside one SQL transaction, so a failed import leaves the ledger
+   * exactly as it was. Rows whose FITID is already stored are skipped, so
+   * re-importing an overlapping period never creates doubles.
+   */
+  commitOfx: base
+    .input(z.object({ accountId: idSchema, content: z.string() }))
+    .handler(async ({ context, input }) => {
+      assertAccountExists(context.db, input.accountId);
+      const rows = readOfxRows(input.content);
+
+      return context.db.transaction((tx) => {
+        // Flag inside the transaction, against the same snapshot the inserts
+        // will see, so a commit racing another write can't double-import.
+        const flagged = flagOfxAgainstStored(tx, input.accountId, rows);
+        const fresh = flagged.filter((row) => !row.duplicate);
+
+        if (fresh.length > 0) {
+          tx.insert(transactions)
+            .values(
+              fresh.map((row) => ({
+                accountId: input.accountId,
+                amount: row.amount,
+                date: row.date,
+                payee: row.label || null,
+                importExternalId: row.fitid,
+              }))
+            )
+            .run();
+        }
+
+        return {
+          imported: fresh.length,
+          duplicates: flagged.length - fresh.length,
+        };
+      });
     }),
 });

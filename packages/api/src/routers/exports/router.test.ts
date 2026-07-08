@@ -142,6 +142,7 @@ test("exports.json contains accounts, groups, categories and transactions exactl
     note: "Courses de la semaine",
     transferId: null,
     importFingerprint: null,
+    importExternalId: null,
     createdAt: groceries.createdAt.toISOString(),
   });
 
@@ -203,12 +204,12 @@ test("exports.csv lays every table out as a titled section, transfers identifiab
   ]);
 
   expect(txSection?.[1]).toBe(
-    "id,accountId,categoryId,amount,date,payee,note,transferId,importFingerprint,createdAt"
+    "id,accountId,categoryId,amount,date,payee,note,transferId,importFingerprint,importExternalId,createdAt"
   );
   const txRows = txSection!.slice(2);
   expect(txRows).toHaveLength(3);
   expect(txRows[0]).toBe(
-    `${groceries.id},${checking.id},${category.id},-2350,2026-07-01T00:00:00.000Z,Carrefour,Courses de la semaine,,,${groceries.createdAt.toISOString()}`
+    `${groceries.id},${checking.id},${category.id},-2350,2026-07-01T00:00:00.000Z,Carrefour,Courses de la semaine,,,,${groceries.createdAt.toISOString()}`
   );
   // The transfer's two legs carry the shared transferId in their own column.
   const legRows = txRows.filter((row) => row.includes(transfer.transferId));

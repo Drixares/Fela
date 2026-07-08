@@ -154,6 +154,7 @@ export const exportsRouter = base.router({
           "note",
           "transferId",
           "importFingerprint",
+          "importExternalId",
           "createdAt",
         ],
         snapshot.transactions
