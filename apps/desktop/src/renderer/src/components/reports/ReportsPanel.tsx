@@ -2,6 +2,7 @@ import { Button } from '@repo/ui/components/button'
 import { Card } from '@repo/ui/components/card'
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -9,11 +10,18 @@ import {
 } from '@repo/ui/components/empty'
 import { Skeleton } from '@repo/ui/components/skeleton'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeftIcon, ChevronRightIcon, PieChartIcon, TriangleAlertIcon } from 'lucide-react'
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  FileUpIcon,
+  PieChartIcon,
+  TriangleAlertIcon
+} from 'lucide-react'
 import { useCallback, useState } from 'react'
 
 import { formatDate } from '../../lib/datetime'
 import { formatEur } from '../../lib/money'
+import { SECTIONS, scrollToSection } from '../../lib/navigation'
 import type { Period } from '../../lib/period'
 import {
   type ExpenseGroupSegment,
@@ -102,10 +110,13 @@ function BreakdownRow({
 /** The breakdown list plus, when the period has no spending, an empty state. */
 function Breakdown({
   segments,
-  total
+  total,
+  emptyAction
 }: {
   segments: { key: string; name: string; total: number; muted?: boolean; onClick?: () => void }[]
   total: number
+  /** Optional call-to-action for the empty state (the top-level onboarding nudge). */
+  emptyAction?: React.ReactNode
 }): React.JSX.Element {
   if (total === 0) {
     return (
@@ -117,6 +128,7 @@ function Breakdown({
           <EmptyTitle>{r.empty}</EmptyTitle>
           <EmptyDescription>{r.emptyHint}</EmptyDescription>
         </EmptyHeader>
+        {emptyAction && <EmptyContent>{emptyAction}</EmptyContent>}
       </Empty>
     )
   }
@@ -201,7 +213,7 @@ export function ReportsPanel(): React.JSX.Element {
     (drill.level === 'transactions' && txList.isLoading)
 
   return (
-    <section className="flex flex-col gap-3">
+    <section id={SECTIONS.reports} className="flex flex-col gap-3">
       <div>
         <h2 className="text-sm font-medium tracking-wide uppercase">{r.title}</h2>
         <p className="text-sm text-muted-foreground">{r.subtitle}</p>
@@ -312,7 +324,16 @@ function GroupsView({
           <span className="font-medium tabular-nums text-foreground">{formatEur(-total)}</span>
         </p>
       )}
-      <Breakdown segments={segments} total={total} />
+      <Breakdown
+        segments={segments}
+        total={total}
+        emptyAction={
+          <Button variant="outline" onClick={() => scrollToSection(SECTIONS.transactions)}>
+            <FileUpIcon />
+            {r.emptyAction}
+          </Button>
+        }
+      />
       {uncategorized > 0 && (
         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <TriangleAlertIcon className="size-3.5 shrink-0" />
