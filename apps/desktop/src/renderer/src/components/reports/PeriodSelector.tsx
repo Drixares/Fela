@@ -26,11 +26,15 @@ const p = strings.reports.period
  * impossible one, and the invalid hint is shown.
  */
 export function PeriodSelector({
-  onChange
+  onChange,
+  defaultPreset = 'thisMonth'
 }: {
   onChange: (period: Period) => void
+  /** Which preset is selected on first render — « ce mois » unless a report
+   * wants another default (the cash flow opens on « 12 mois », see issue #16). */
+  defaultPreset?: Exclude<PeriodPreset, 'custom'>
 }): React.JSX.Element {
-  const [preset, setPreset] = useState<PeriodPreset>('thisMonth')
+  const [preset, setPreset] = useState<PeriodPreset>(defaultPreset)
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
 

@@ -477,6 +477,27 @@ export const strings = {
     txCount: (n: number) => `${n} transaction${n > 1 ? 's' : ''}`,
     noPayee: 'Sans libellé'
   },
+  cashFlow: {
+    // « Est-ce que je vis au-dessus de mes moyens ? » — revenus vs dépenses par
+    // mois sur la période choisie (12 mois par défaut, voir issue #16).
+    title: 'Cash flow mensuel',
+    subtitle: 'Est-ce que je vis au-dessus de mes moyens ? Vos revenus et dépenses, mois par mois.',
+    income: 'Revenus',
+    expenses: 'Dépenses',
+    // The period totals shown above the chart.
+    netLabel: 'Solde net',
+    surplus: 'Excédent',
+    deficit: 'Déficit',
+    empty: 'Aucun mouvement catégorisé sur cette période.',
+    emptyHint: 'Choisissez une autre période, ou classez vos transactions en revenus et dépenses.',
+    // Uncategorized movements carry no revenu/dépense type, so they count on
+    // neither side — surfaced so an incomplete cash flow is never mistaken for a
+    // complete one (like the « Non classé » segment of the group breakdown).
+    incompleteHint: (n: number) =>
+      `${n} mouvement${n > 1 ? 's' : ''} non catégorisé${n > 1 ? 's' : ''} ` +
+      `sur la période ${n > 1 ? 'ne sont' : "n'est"} compté${n > 1 ? 's' : ''} ` +
+      `ni en revenus ni en dépenses — le cash flow est incomplet.`
+  },
   versions: {
     electron: (version: string | undefined) => `Electron v${version ?? ''}`,
     chromium: (version: string | undefined) => `Chromium v${version ?? ''}`,
