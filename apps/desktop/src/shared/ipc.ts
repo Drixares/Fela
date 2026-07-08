@@ -67,7 +67,9 @@ export interface ImportsApi {
  * A generated data export, ready to be written to disk: the suggested file
  * name and the full content as a string. Produced by the `exports.*` oRPC
  * procedures; the renderer forwards it verbatim — writing the file is the main
- * process's job and ends here (see the V1 PRD, #1, and issue #10).
+ * process's job and ends here (see the V1 PRD, #1, and issue #10). Must stay
+ * structurally identical to `ExportFile` in @repo/api's exports router — this
+ * file redeclares it to stay free of workspace imports.
  */
 export interface ExportFileToSave {
   fileName: string

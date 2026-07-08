@@ -15,6 +15,8 @@ import { base } from "../../context.js";
  * content as a string. The renderer forwards both, verbatim, to the main
  * process, which shows the native save dialog and writes to disk — the only
  * layer allowed to touch the filesystem (see the V1 PRD, #1, and issue #10).
+ * Must stay structurally identical to `ExportFileToSave` in the desktop app's
+ * shared/ipc.ts, which redeclares it to stay free of workspace imports.
  */
 export interface ExportFile {
   fileName: string;
@@ -22,9 +24,11 @@ export interface ExportFile {
 }
 
 /**
- * Everything the database holds, read in one shot so the export is a coherent
- * snapshot: every table row, ordered by id so output is stable. Transfers stay
- * identifiable in the flat transaction list through their shared `transferId`.
+ * The user's whole history — the four tables issue #10 names, read in one shot
+ * so the export is a coherent snapshot, each ordered by id so output is
+ * stable. Transfers stay identifiable in the flat transaction list through
+ * their shared `transferId`. Import mappings are deliberately left out: they
+ * are per-account import tooling, not history the user needs to take along.
  */
 function readSnapshot(db: Db): {
   accounts: Account[];
@@ -59,8 +63,10 @@ function exportFileName(extension: string): string {
  * containing the separator, a quote or a newline is quoted with inner quotes
  * doubled, so free text like payees and notes can never break the row grid.
  */
-function csvCell(value: string | number | boolean | Date | null): string {
-  if (value === null) return "";
+function csvCell(
+  value: string | number | boolean | Date | null | undefined
+): string {
+  if (value == null) return "";
   const text = value instanceof Date ? value.toISOString() : String(value);
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
@@ -70,20 +76,14 @@ function csvCell(value: string | number | boolean | Date | null): string {
  * `columns` picked in header order. Sections keep the export a single file
  * while every table stays separately parseable.
  */
-function csvSection<T>(
-  name: string,
-  columns: (keyof T & string)[],
-  rows: T[]
-): string {
+function csvSection<
+  T extends Record<string, string | number | boolean | Date | null>,
+>(name: string, columns: (keyof T & string)[], rows: T[]): string {
   const lines = [
     `# ${name}`,
     columns.join(","),
     ...rows.map((row) =>
-      columns
-        .map((column) =>
-          csvCell(row[column] as string | number | boolean | Date | null)
-        )
-        .join(",")
+      columns.map((column) => csvCell(row[column])).join(",")
     ),
   ];
   return lines.join("\n");
