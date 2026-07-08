@@ -42,3 +42,19 @@ with `sqlite3` is fine; dates are epoch **seconds**
   before clicking, or you'll hit a hidden option from another select.
 - Toasts render under `[data-sonner-toast]`; badges under
   `[data-slot="badge"]`.
+- **Base UI select popups race their own opening click**: a synthetic
+  mousedown/mouseup pair sometimes toggles the popup straight closed, and a
+  submit clicked mid-close can leave the dialog visibly open with its backdrop
+  swallowing every later click (reads as "reorder/edit did nothing"). Recover
+  with Escape; on flake, re-click the trigger and re-check for visible
+  `[role="option"]` before proceeding.
+- **`window.api` is not stubbable** (contextBridge freezes it), and the native
+  file chooser can't be keystroked without macOS accessibility permission for
+  your terminal. To drive an import end-to-end, set the flow's `file` state
+  through the React fiber of an element _inside_ the component (e.g.
+  `#import-account` → walk `fiber.return` up to the function component, third
+  `useState` hook, `hook.queue.dispatch({ name, content })`), then click
+  through the real mapping/preview/commit UI. If you opened a native chooser
+  by accident, it dies with your instance's PID.
+- **A CSV commit memorises its column mapping** (`import_mappings`) — delete
+  that row during DB restore or the next verification skips the mapping step.

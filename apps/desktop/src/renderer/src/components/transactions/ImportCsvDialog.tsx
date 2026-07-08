@@ -21,15 +21,19 @@ import {
   SelectValue
 } from '@repo/ui/components/select'
 import { toast } from '@repo/ui/components/sonner'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRightIcon, FileUpIcon } from 'lucide-react'
 
+import { flattenCategories } from '../../lib/categories'
 import { formatDate } from '../../lib/datetime'
 import { formatEur } from '../../lib/money'
 import { type Account, client, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
 
 const t = strings.imports
+
+/** Sentinel select value for "sans catégorie" (Select values are strings). */
+const NO_CATEGORY = 'none'
 
 /** The file as the main process hands it over: name + decoded content. */
 type ChosenCsvFile = NonNullable<Awaited<ReturnType<typeof window.api.imports.chooseCsvFile>>>
@@ -124,12 +128,25 @@ function ImportFlow({
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [forced, setForced] = useState<Set<number>>(new Set())
 
-  /** Show a freshly computed preview, dropping any expand/force choices made
-   * against the previous one (their line numbers no longer apply). */
+  // The user's corrections to the categories the rules announced (issue #13),
+  // keyed by CSV line. Untouched lines keep the rules' verdict server-side.
+  const [categoryOverrides, setCategoryOverrides] = useState<Map<number, number | null>>(new Map())
+
+  // Categories offered by the per-row correction select in the preview.
+  const { data: categoriesOverview } = useQuery(orpc.categories.overview.queryOptions())
+  const categories = flattenCategories(categoriesOverview)
+  const categoryItems: Record<string, string> = {
+    [NO_CATEGORY]: t.preview.noCategory,
+    ...Object.fromEntries(categories.map((c) => [String(c.id), c.name]))
+  }
+
+  /** Show a freshly computed preview, dropping any expand/force/category
+   * choices made against the previous one (their line numbers no longer apply). */
   function showPreview(next: ImportPreview): void {
     setPreview(next)
     setExpanded(new Set())
     setForced(new Set())
+    setCategoryOverrides(new Map())
   }
 
   /** Flip one line in a line-keyed set (expand/collapse, force/unforce). */
@@ -221,7 +238,11 @@ function ImportFlow({
         accountId,
         content: file.content,
         mapping,
-        forceLines: [...forced]
+        forceLines: [...forced],
+        categoryOverrides: [...categoryOverrides].map(([line, categoryId]) => ({
+          line,
+          categoryId
+        }))
       })
       void queryClient.invalidateQueries({ queryKey: orpc.transactions.key() })
       void queryClient.invalidateQueries({ queryKey: orpc.accounts.key() })
@@ -355,6 +376,14 @@ function ImportFlow({
               // Dim only probable duplicates that will be skipped — a forced one
               // is entering the ledger, so it reads at full strength.
               const dimmed = row.duplicate && !isForced
+              // The category this row will land under: the user's correction
+              // when made, else what the rules announced (issue #13). Only rows
+              // that will import get the correction select — a skipped
+              // duplicate writes nothing to classify.
+              const willImport = !row.duplicate || isForced
+              const categoryId = categoryOverrides.has(row.line)
+                ? (categoryOverrides.get(row.line) ?? null)
+                : (row.category?.id ?? null)
               return (
                 <li key={row.line} className="text-sm">
                   <div
@@ -389,6 +418,36 @@ function ImportFlow({
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-3 text-muted-foreground">
+                      {willImport && (
+                        <Select
+                          items={categoryItems}
+                          value={categoryId === null ? NO_CATEGORY : String(categoryId)}
+                          onValueChange={(value) =>
+                            setCategoryOverrides((map) =>
+                              new Map(map).set(
+                                row.line,
+                                value === NO_CATEGORY || value === null ? null : Number(value)
+                              )
+                            )
+                          }
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            className="w-36 text-xs"
+                            aria-label={t.preview.categorySelectLabel(row.label)}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_CATEGORY}>{t.preview.noCategory}</SelectItem>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={String(category.id)}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                       <span>{formatDate(new Date(row.date))}</span>
                       <span className="font-medium tabular-nums text-foreground">
                         {formatEur(row.amount)}

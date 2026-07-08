@@ -21,6 +21,13 @@ export type CategoryGroupWithCategories = CategoriesOverview['groups'][number]
 export type Category = CategoryGroupWithCategories['categories'][number]
 
 /**
+ * A categorization rule as the renderer receives it from `rules.list` — « si
+ * le libellé contient X → catégorie Y », in application order. Inferred from
+ * the client contract so it can never drift from what the procedure returns.
+ */
+export type Rule = Awaited<ReturnType<AppRouterClient['rules']['list']>>[number]
+
+/**
  * What the renderer receives from `transactions.list` — the rows matching the
  * filters plus their count and signed sum, aggregated in SQL. Each row is the
  * movement plus the display names (account, and category when filed) resolved on

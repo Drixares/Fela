@@ -4,6 +4,7 @@ import { accountsRouter } from "./accounts/router.js";
 import { categoriesRouter } from "./categories/router.js";
 import { exportsRouter } from "./exports/router.js";
 import { importsRouter } from "./imports/router.js";
+import { rulesRouter } from "./rules/router.js";
 import { testRouter } from "./test/router.js";
 import { transactionsRouter } from "./transactions/router.js";
 import { transfersRouter } from "./transfers/router.js";
@@ -22,6 +23,7 @@ const appContract = {
   categories: categoriesRouter,
   exports: exportsRouter,
   imports: importsRouter,
+  rules: rulesRouter,
   transactions: transactionsRouter,
   transfers: transfersRouter,
 };
