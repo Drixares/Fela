@@ -850,3 +850,47 @@ test("transactions.update and delete refuse to touch a transfer leg", async () =
   expect(await balanceOf(context, from)).toBe(7_000);
   expect(await balanceOf(context, to)).toBe(3_000);
 });
+
+test("transactions.list direction filter keeps only outflows or only inflows", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -2_500,
+      date: new Date("2026-03-02"),
+      payee: "Carrefour",
+    },
+    { context }
+  );
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: 250_000,
+      date: new Date("2026-03-05"),
+      payee: "Employeur",
+    },
+    { context }
+  );
+
+  const outflows = await call(
+    appRouter.transactions.list,
+    { direction: "outflow" },
+    { context }
+  );
+  expect(outflows.count).toBe(1);
+  expect(outflows.sum).toBe(-2_500);
+  expect(outflows.transactions.every((t) => t.amount < 0)).toBe(true);
+
+  const inflows = await call(
+    appRouter.transactions.list,
+    { direction: "inflow" },
+    { context }
+  );
+  expect(inflows.count).toBe(1);
+  expect(inflows.sum).toBe(250_000);
+  expect(inflows.transactions.every((t) => t.amount > 0)).toBe(true);
+});

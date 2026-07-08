@@ -21,6 +21,11 @@ const noteSchema = z.string().max(1000).nullish();
  * `minAmount`/`maxAmount` bound the amount's *magnitude* in minor units: a
  * person thinks « plus de 30 € » whatever the direction, while storage is
  * signed.
+ *
+ * `direction` keeps only outflows (spending) or only inflows: the expense
+ * report drills a category down to its transactions through this same
+ * procedure, and passes `"outflow"` so the leaf list shows exactly the rows the
+ * report summed (which counts outflows only) — the two can never disagree.
  */
 export const listFiltersSchema = z
   .object({
@@ -31,6 +36,7 @@ export const listFiltersSchema = z
     to: z.date().optional(),
     minAmount: z.int().nonnegative().optional(),
     maxAmount: z.int().nonnegative().optional(),
+    direction: z.enum(["inflow", "outflow"]).optional(),
   })
   .optional();
 
