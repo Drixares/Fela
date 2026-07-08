@@ -20,7 +20,7 @@ import {
 } from '@repo/ui/components/select'
 import { Skeleton } from '@repo/ui/components/skeleton'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { toast } from '@repo/ui/components/sonner'
 import {
@@ -30,18 +30,18 @@ import {
   PencilIcon,
   PlusIcon,
   SearchIcon,
-  Trash2Icon
+  SparklesIcon,
+  Trash2Icon,
+  WandIcon
 } from 'lucide-react'
 
+import { flattenCategories } from '../../lib/categories'
 import { formatDate, fromDateInputValue, fromDateInputValueEndOfDay } from '../../lib/datetime'
 import { formatEur, parseEurToCents } from '../../lib/money'
 import { type Transaction, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
-import {
-  CategorySelectOptions,
-  NO_CATEGORY,
-  flatCategories
-} from '../categories/CategorySelectOptions'
+import { CategorySelectOptions, NO_CATEGORY } from '../categories/CategorySelectOptions'
+import { RuleFormDialog } from '../rules/RuleFormDialog'
 import { DeleteTransactionDialog } from './DeleteTransactionDialog'
 import { ImportCsvDialog } from './ImportCsvDialog'
 import { TransactionFormDialog } from './TransactionFormDialog'
@@ -112,6 +112,8 @@ export function TransactionsPanel(): React.JSX.Element {
   const [importOpen, setImportOpen] = useState(false)
   const [editing, setEditing] = useState<Transaction | undefined>(undefined)
   const [deleting, setDeleting] = useState<Transaction | undefined>(undefined)
+  // The transaction a new rule is being drafted from (issue #15), or undefined.
+  const [ruleFrom, setRuleFrom] = useState<Transaction | undefined>(undefined)
 
   const queryClient = useQueryClient()
 
@@ -153,8 +155,54 @@ export function TransactionsPanel(): React.JSX.Element {
   const canTransfer = liveAccounts.length >= 2
   const showAccountName = accountFilter === ALL_ACCOUNTS
 
-  const rows = list?.transactions ?? []
-  const leafCategories = flatCategories(categories)
+  // Memoised so the payee-suggestion memo below only recomputes when the list
+  // actually changes, not on every render.
+  const rows = useMemo(() => list?.transactions ?? [], [list])
+  // Every leaf category, flat — shared by the filter/bulk pickers and the
+  // « create rule from this transaction » form.
+  const leafCategories = flattenCategories(categories)
+
+  // History-based suggestion (issue #15): for the uncategorised rows on screen,
+  // ask the server for the last category used for each payee, so classifying « un
+  // payee déjà rencontré » is a one-click nod. The payee list is sorted so the
+  // query key stays stable while the same rows are shown.
+  const uncategorizedPayees = useMemo(() => {
+    const payees = new Set<string>()
+    for (const tx of rows) {
+      if (tx.categoryId === null && tx.transferId === null && tx.payee) {
+        payees.add(tx.payee)
+      }
+    }
+    return [...payees].sort()
+  }, [rows])
+
+  const { data: suggestionList } = useQuery(
+    orpc.transactions.suggestCategories.queryOptions({
+      input: { payees: uncategorizedPayees },
+      enabled: uncategorizedPayees.length > 0
+    })
+  )
+  const suggestionByPayee = useMemo(() => {
+    const map = new Map<string, { id: number; name: string }>()
+    for (const suggestion of suggestionList ?? []) {
+      map.set(suggestion.payee, suggestion.category)
+    }
+    return map
+  }, [suggestionList])
+
+  /** Accept a row's history suggestion — file it under the proposed category. */
+  function acceptSuggestion(id: number, categoryId: number): void {
+    bulkCategorize.mutate(
+      { ids: [id], categoryId },
+      {
+        onSuccess: () => {
+          void queryClient.invalidateQueries({ queryKey: orpc.transactions.key() })
+          toast.success(t.suggestion.toast.done)
+        },
+        onError: () => toast.error(t.suggestion.toast.error)
+      }
+    )
+  }
 
   const hasActiveFilters =
     accountFilter !== ALL_ACCOUNTS ||
@@ -463,77 +511,112 @@ export function TransactionsPanel(): React.JSX.Element {
             </div>
           )}
           <ul className="divide-y divide-border">
-            {rows.map((transaction) => (
-              <li
-                key={transaction.id}
-                className="flex items-center justify-between gap-3 px-4 py-3"
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  {transaction.transferId === null ? (
-                    <Checkbox
-                      aria-label={s.selectOne(transaction.payee ?? t.noPayee)}
-                      checked={selectedIds.has(transaction.id)}
-                      onCheckedChange={(checked) => toggleOne(transaction.id, checked === true)}
-                    />
-                  ) : (
-                    // Keeps transfer rows aligned with the selectable ones.
-                    <span aria-hidden className="size-4 shrink-0" />
-                  )}
-                  <div className="flex min-w-0 flex-col items-start gap-1">
-                    <span className="w-full truncate font-medium">
-                      {transaction.payee ?? t.noPayee}
-                    </span>
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                      <span>{formatDate(transaction.date)}</span>
-                      {showAccountName && (
-                        <>
-                          <span aria-hidden>·</span>
-                          <span>{transaction.accountName}</span>
-                        </>
-                      )}
-                      {transaction.transferId !== null ? (
-                        <Badge variant="outline" className="gap-1">
-                          <ArrowLeftRightIcon className="size-3" />
-                          {transferStrings.badge}
-                        </Badge>
-                      ) : (
-                        transaction.categoryName && (
+            {rows.map((transaction) => {
+              // A history suggestion is offered only on an uncategorised,
+              // non-transfer row whose payee has been filed before (issue #15).
+              const suggestion =
+                transaction.transferId === null &&
+                transaction.categoryId === null &&
+                transaction.payee
+                  ? suggestionByPayee.get(transaction.payee)
+                  : undefined
+              return (
+                <li
+                  key={transaction.id}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    {transaction.transferId === null ? (
+                      <Checkbox
+                        aria-label={s.selectOne(transaction.payee ?? t.noPayee)}
+                        checked={selectedIds.has(transaction.id)}
+                        onCheckedChange={(checked) => toggleOne(transaction.id, checked === true)}
+                      />
+                    ) : (
+                      // Keeps transfer rows aligned with the selectable ones.
+                      <span aria-hidden className="size-4 shrink-0" />
+                    )}
+                    <div className="flex min-w-0 flex-col items-start gap-1">
+                      <span className="w-full truncate font-medium">
+                        {transaction.payee ?? t.noPayee}
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span>{formatDate(transaction.date)}</span>
+                        {showAccountName && (
+                          <>
+                            <span aria-hidden>·</span>
+                            <span>{transaction.accountName}</span>
+                          </>
+                        )}
+                        {transaction.transferId !== null ? (
+                          <Badge variant="outline" className="gap-1">
+                            <ArrowLeftRightIcon className="size-3" />
+                            {transferStrings.badge}
+                          </Badge>
+                        ) : transaction.categoryName ? (
                           <Badge variant="secondary">{transaction.categoryName}</Badge>
-                        )
-                      )}
+                        ) : (
+                          suggestion && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 gap-1 px-2 text-xs font-normal"
+                              disabled={bulkCategorize.isPending}
+                              aria-label={t.suggestion.acceptLabel(
+                                transaction.payee ?? t.noPayee,
+                                suggestion.name
+                              )}
+                              onClick={() => acceptSuggestion(transaction.id, suggestion.id)}
+                            >
+                              <SparklesIcon className="size-3" />
+                              {t.suggestion.accept(suggestion.name)}
+                            </Button>
+                          )
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  {/* The sign carries the direction (formatEur renders the « - » for
-                      outflows), so the amount stays in the plain balance style used
-                      across the app rather than reaching outside the design tokens. */}
-                  <span className="mr-1 font-medium tabular-nums">
-                    {formatEur(transaction.amount)}
-                  </span>
-                  {transaction.transferId === null && (
-                    <>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={t.edit}
-                        onClick={() => openEdit(transaction)}
-                      >
-                        <PencilIcon />
-                      </Button>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={t.delete}
-                        onClick={() => setDeleting(transaction)}
-                      >
-                        <Trash2Icon />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </li>
-            ))}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {/* The sign carries the direction (formatEur renders the « - » for
+                        outflows), so the amount stays in the plain balance style used
+                        across the app rather than reaching outside the design tokens. */}
+                    <span className="mr-1 font-medium tabular-nums">
+                      {formatEur(transaction.amount)}
+                    </span>
+                    {transaction.transferId === null && (
+                      <>
+                        {transaction.payee && (
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={t.createRule}
+                            onClick={() => setRuleFrom(transaction)}
+                          >
+                            <WandIcon />
+                          </Button>
+                        )}
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={t.edit}
+                          onClick={() => openEdit(transaction)}
+                        >
+                          <PencilIcon />
+                        </Button>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={t.delete}
+                          onClick={() => setDeleting(transaction)}
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         </Card>
       )}
@@ -562,6 +645,16 @@ export function TransactionsPanel(): React.JSX.Element {
         open={deleting !== undefined}
         onOpenChange={(open) => !open && setDeleting(undefined)}
         transaction={deleting}
+      />
+      {/* « Créer une règle depuis cette transaction » (issue #15): the form
+          opens pre-filled with the row's payee and category, and offers to
+          apply the new rule retroactively. */}
+      <RuleFormDialog
+        open={ruleFrom !== undefined}
+        onOpenChange={(open) => !open && setRuleFrom(undefined)}
+        categories={leafCategories}
+        defaultPattern={ruleFrom?.payee ?? undefined}
+        defaultCategoryId={ruleFrom?.categoryId ?? undefined}
       />
     </section>
   )

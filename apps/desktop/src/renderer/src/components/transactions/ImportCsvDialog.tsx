@@ -146,7 +146,17 @@ function ImportFlow({
     setPreview(next)
     setExpanded(new Set())
     setForced(new Set())
-    setCategoryOverrides(new Map())
+    // Pre-accept the history suggestion (issue #15): seed the corrections with
+    // each « sans règle » row's proposed category, so committing without
+    // touching it files the row under it — « un simple acquiescement ». Rows a
+    // rule already classifies keep the rule's verdict (no override seeded).
+    const seeded = new Map<number, number | null>()
+    for (const row of next.rows) {
+      if (!row.category && row.suggestion) {
+        seeded.set(row.line, row.suggestion.id)
+      }
+    }
+    setCategoryOverrides(seeded)
   }
 
   /** Flip one line in a line-keyed set (expand/collapse, force/unforce). */
@@ -418,6 +428,14 @@ function ImportFlow({
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-3 text-muted-foreground">
+                      {willImport &&
+                        row.suggestion &&
+                        !row.category &&
+                        categoryId === row.suggestion.id && (
+                          <Badge variant="outline" className="shrink-0 text-xs font-normal">
+                            {t.preview.suggestedBadge}
+                          </Badge>
+                        )}
                       {willImport && (
                         <Select
                           items={categoryItems}

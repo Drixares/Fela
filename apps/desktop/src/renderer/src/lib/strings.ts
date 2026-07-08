@@ -153,6 +153,19 @@ export const strings = {
     filterLabel: 'Compte',
     noPayee: 'Sans libellé',
     noCategory: 'Sans catégorie',
+    // One-gesture rule creation from a transaction (issue #15): « toujours
+    // classer SNCF en Transport ».
+    createRule: 'Créer une règle depuis cette transaction',
+    // History-based suggestion offered on an uncategorised row (issue #15):
+    // the last category used for the same payee, accepted in one click.
+    suggestion: {
+      accept: (category: string) => `Classer en ${category}`,
+      acceptLabel: (payee: string, category: string) => `Classer « ${payee} » en ${category}`,
+      toast: {
+        done: 'Transaction classée.',
+        error: 'Impossible de classer la transaction.'
+      }
+    },
     filters: {
       searchLabel: 'Recherche',
       searchPlaceholder: 'Rechercher un libellé ou une note…',
@@ -264,6 +277,19 @@ export const strings = {
       patternRequired: 'Le texte recherché est requis.',
       categoryRequired: 'Choisissez une catégorie.'
     },
+    // Retroactive application offered at rule creation (issue #15): the app
+    // proposes to apply the new rule to matching transactions already in the
+    // ledger — only if the user explicitly opts in.
+    retroactive: {
+      count: (n: number) =>
+        `${n} transaction${n > 1 ? 's' : ''} existante${n > 1 ? 's' : ''} ` +
+        `correspond${n > 1 ? 'ent' : ''} à ce motif.`,
+      apply: 'Les reclasser aussi maintenant',
+      toast: {
+        applied: (n: number) => `${n} transaction${n > 1 ? 's' : ''} reclassée${n > 1 ? 's' : ''}.`,
+        error: 'Règle créée, mais impossible de reclasser les transactions existantes.'
+      }
+    },
     deleteDialog: {
       title: 'Supprimer cette règle ?',
       description: (pattern: string) =>
@@ -328,6 +354,9 @@ export const strings = {
       // before validating rather than after (see issue #13).
       categorySelectLabel: (label: string) => `Catégorie appliquée à « ${label} »`,
       noCategory: 'Sans catégorie',
+      // Marks a per-row category that was pre-filled from the payee's history
+      // (issue #15) rather than by a rule — a proposal the user can accept as is.
+      suggestedBadge: 'Suggéré',
       // Count reflects new rows plus the probable duplicates the user forced.
       submit: (added: number) => `Importer ${added} transaction${added > 1 ? 's' : ''}`
     },

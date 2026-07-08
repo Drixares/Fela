@@ -974,6 +974,77 @@ test("imports.preview announces the category each rule will apply to each incomi
   ]);
 });
 
+test("imports.preview suggests the last category used for a known payee when no rule matches", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const groceriesId = await makeCategory(context, "Courses");
+
+  // History: a CARREFOUR movement was once filed under Courses.
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -1_000,
+      date: new Date("2026-02-01"),
+      payee: "CARREFOUR",
+      categoryId: groceriesId,
+    },
+    { context }
+  );
+
+  const preview = await call(
+    appRouter.imports.preview,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+
+  const carrefour = preview.rows.find((row) => row.label === "CARREFOUR");
+  // No rule, so no rule verdict — but the history proposes Courses.
+  expect(carrefour?.category).toBeNull();
+  expect(carrefour?.suggestion).toEqual({ id: groceriesId, name: "Courses" });
+
+  // A never-seen payee gets neither a rule nor a suggestion.
+  const paul = preview.rows.find((row) => row.label === "BOULANGERIE PAUL");
+  expect(paul?.category).toBeNull();
+  expect(paul?.suggestion).toBeNull();
+});
+
+test("imports.preview lets a rule win over the history suggestion", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const groceriesId = await makeCategory(context, "Courses");
+  const restaurantId = await makeCategory(context, "Restaurants");
+
+  // History says CARREFOUR → Restaurants, but a rule says CARREFOUR → Courses.
+  await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -1_000,
+      date: new Date("2026-02-01"),
+      payee: "CARREFOUR",
+      categoryId: restaurantId,
+    },
+    { context }
+  );
+  await call(
+    appRouter.rules.create,
+    { pattern: "CARREFOUR", categoryId: groceriesId },
+    { context }
+  );
+
+  const preview = await call(
+    appRouter.imports.preview,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+
+  const carrefour = preview.rows.find((row) => row.label === "CARREFOUR");
+  // The rule verdict stands; the suggestion steps aside for « sans règle » rows.
+  expect(carrefour?.category).toEqual({ id: groceriesId, name: "Courses" });
+  expect(carrefour?.suggestion).toBeNull();
+});
+
 test("two rules matching the same label are resolved by application order — reordering flips the winner", async () => {
   const context = createTestContext();
   const groceriesId = await makeCategory(context, "Courses");

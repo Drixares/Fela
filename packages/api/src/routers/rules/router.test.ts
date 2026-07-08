@@ -18,6 +18,51 @@ async function makeCategory(
   return category.id;
 }
 
+/** Create an account and return its id — a fixture for the retroactive tests. */
+async function makeAccount(
+  context: ServerContext,
+  name = "Compte courant"
+): Promise<number> {
+  const account = await call(
+    appRouter.accounts.create,
+    { name, type: "checking", initialBalance: 0 },
+    { context }
+  );
+  return account.id;
+}
+
+/** Record one transaction and return its id. */
+async function record(
+  context: ServerContext,
+  accountId: number,
+  payee: string,
+  categoryId: number | null = null
+): Promise<number> {
+  const tx = await call(
+    appRouter.transactions.create,
+    {
+      accountId,
+      amount: -1_000,
+      date: new Date("2026-03-01"),
+      payee,
+      categoryId,
+    },
+    { context }
+  );
+  return tx.id;
+}
+
+/** The category id currently filed on a transaction, read back through the list. */
+async function categoryOf(
+  context: ServerContext,
+  transactionId: number
+): Promise<number | null> {
+  const list = await call(appRouter.transactions.list, undefined, { context });
+  const tx = list.transactions.find((t) => t.id === transactionId);
+  if (!tx) throw new Error(`No transaction ${transactionId} in list`);
+  return tx.categoryId;
+}
+
 // ── CRUD ──
 
 test("rules.create appends a « label contains X → category Y » rule and rules.list returns it in application order", async () => {
@@ -201,4 +246,140 @@ test("rules.reorder refuses a sequence that is not exactly the current set of ru
       { context }
     )
   ).rejects.toThrowError(/BAD_REQUEST|every rule/i);
+});
+
+// ── Retroactive application (issue #15) ──
+
+test("rules.matchingCount counts the existing transactions a pattern would reclassify", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const transport = await makeCategory(context, "Transport");
+
+  await record(context, accountId, "SNCF PARIS"); // uncategorised → would change
+  await record(context, accountId, "sncf lyon"); // case-insensitive → would change
+  await record(context, accountId, "CARREFOUR"); // no match
+  await record(context, accountId, "SNCF ALREADY", transport); // already Transport → no change
+
+  const { count } = await call(
+    appRouter.rules.matchingCount,
+    { pattern: "SNCF", categoryId: transport },
+    { context }
+  );
+  expect(count).toBe(2);
+});
+
+test("rules.matchingCount never counts a transfer leg", async () => {
+  const context = createTestContext();
+  const source = await makeAccount(context, "Courant");
+  const destination = await makeAccount(context, "Livret");
+  const transport = await makeCategory(context, "Transport");
+
+  await call(
+    appRouter.transfers.create,
+    {
+      fromAccountId: source,
+      toAccountId: destination,
+      amount: 5_000,
+      date: new Date("2026-03-01"),
+      payee: "SNCF remboursement",
+    },
+    { context }
+  );
+
+  const { count } = await call(
+    appRouter.rules.matchingCount,
+    { pattern: "SNCF", categoryId: transport },
+    { context }
+  );
+  expect(count).toBe(0);
+});
+
+test("creating a rule does NOT touch existing transactions on its own", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const transport = await makeCategory(context, "Transport");
+  const sncf = await record(context, accountId, "SNCF PARIS");
+
+  await call(
+    appRouter.rules.create,
+    { pattern: "SNCF", categoryId: transport },
+    { context }
+  );
+
+  // Rules classify incoming rows at import time; a bare create rewrites nothing.
+  expect(await categoryOf(context, sncf)).toBeNull();
+});
+
+test("rules.applyRetroactive reclassifies the matching transactions on explicit demand", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const transport = await makeCategory(context, "Transport");
+  const sncfA = await record(context, accountId, "SNCF PARIS");
+  const sncfB = await record(context, accountId, "sncf lyon");
+  const carrefour = await record(context, accountId, "CARREFOUR");
+
+  const rule = await call(
+    appRouter.rules.create,
+    { pattern: "SNCF", categoryId: transport },
+    { context }
+  );
+
+  const result = await call(
+    appRouter.rules.applyRetroactive,
+    { id: rule.id },
+    { context }
+  );
+  expect(result).toEqual({ updated: 2 });
+
+  expect(await categoryOf(context, sncfA)).toBe(transport);
+  expect(await categoryOf(context, sncfB)).toBe(transport);
+  // A non-matching row is left exactly as it was.
+  expect(await categoryOf(context, carrefour)).toBeNull();
+});
+
+test("rules.applyRetroactive leaves transfer legs untouched", async () => {
+  const context = createTestContext();
+  const source = await makeAccount(context, "Courant");
+  const destination = await makeAccount(context, "Livret");
+  const transport = await makeCategory(context, "Transport");
+  const spend = await record(context, source, "SNCF PARIS");
+
+  await call(
+    appRouter.transfers.create,
+    {
+      fromAccountId: source,
+      toAccountId: destination,
+      amount: 5_000,
+      date: new Date("2026-03-01"),
+      payee: "SNCF virement",
+    },
+    { context }
+  );
+
+  const rule = await call(
+    appRouter.rules.create,
+    { pattern: "SNCF", categoryId: transport },
+    { context }
+  );
+  const result = await call(
+    appRouter.rules.applyRetroactive,
+    { id: rule.id },
+    { context }
+  );
+
+  // Only the real spend is reclassified; both transfer legs are skipped.
+  expect(result).toEqual({ updated: 1 });
+  expect(await categoryOf(context, spend)).toBe(transport);
+  const list = await call(appRouter.transactions.list, undefined, { context });
+  const legs = list.transactions.filter((t) => t.transferId !== null);
+  expect(legs).toHaveLength(2);
+  expect(legs.every((t) => t.categoryId === null)).toBe(true);
+});
+
+test("rules.applyRetroactive refuses an unknown rule id", async () => {
+  const context = createTestContext();
+
+  await expect(
+    call(appRouter.rules.applyRetroactive, { id: 999 }, { context })
+  ).rejects.toThrowError(/no categorization rule/i);
 });
