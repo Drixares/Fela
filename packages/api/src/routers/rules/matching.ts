@@ -60,3 +60,35 @@ export function categorize(
   }
   return null;
 }
+
+/**
+ * What the preview announces for one incoming label: the category the rules
+ * will file it under — id for the commit, name for the screen — or `null`
+ * when no rule matches. Both import previews (CSV and OFX) return this exact
+ * shape so their commits and renderers can't drift apart.
+ */
+export function announcedCategory(
+  label: string,
+  rules: ApplicableRule[]
+): { id: number; name: string } | null {
+  const match = categorize(label, rules);
+  return match ? { id: match.categoryId, name: match.categoryName } : null;
+}
+
+/**
+ * The category a committed row actually lands under: the user's preview
+ * correction when one was sent for this row's key, else the ordered rules'
+ * verdict. Naming the precedence once keeps the CSV and OFX commits agreeing
+ * on it. A correction of `null` deliberately un-classifies a row a rule
+ * matched.
+ */
+export function effectiveCategoryId<K>(
+  overrides: Map<K, number | null>,
+  key: K,
+  label: string,
+  rules: ApplicableRule[]
+): number | null {
+  return overrides.has(key)
+    ? (overrides.get(key) ?? null)
+    : (categorize(label, rules)?.categoryId ?? null);
+}

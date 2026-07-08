@@ -24,6 +24,7 @@ import { toast } from '@repo/ui/components/sonner'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRightIcon, FileUpIcon } from 'lucide-react'
 
+import { flattenCategories } from '../../lib/categories'
 import { formatDate } from '../../lib/datetime'
 import { formatEur } from '../../lib/money'
 import { type Account, client, orpc } from '../../lib/orpc'
@@ -133,10 +134,7 @@ function ImportFlow({
 
   // Categories offered by the per-row correction select in the preview.
   const { data: categoriesOverview } = useQuery(orpc.categories.overview.queryOptions())
-  const categories = [
-    ...(categoriesOverview?.groups ?? []).flatMap((group) => group.categories),
-    ...(categoriesOverview?.ungrouped ?? [])
-  ]
+  const categories = flattenCategories(categoriesOverview)
   const categoryItems: Record<string, string> = {
     [NO_CATEGORY]: t.preview.noCategory,
     ...Object.fromEntries(categories.map((c) => [String(c.id), c.name]))

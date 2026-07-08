@@ -5,7 +5,11 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { base } from "../../context.js";
-import { categorize, loadApplicableRules } from "../rules/matching.js";
+import {
+  announcedCategory,
+  effectiveCategoryId,
+  loadApplicableRules,
+} from "../rules/matching.js";
 import {
   CsvImportError,
   flagWithMatches,
@@ -265,20 +269,15 @@ export const importsRouter = base.router({
         // an implementation detail, and the renderer only renders these. Each
         // probable duplicate carries the stored transaction it collided with,
         // so the user can unfold it, judge it, and force a false positive in.
-        rows: flagged.map((row) => {
-          const match = categorize(row.label, rules);
-          return {
-            line: row.line,
-            date: row.date,
-            amount: row.amount,
-            label: row.label,
-            duplicate: row.duplicate,
-            existing: row.existing,
-            category: match
-              ? { id: match.categoryId, name: match.categoryName }
-              : null,
-          };
-        }),
+        rows: flagged.map((row) => ({
+          line: row.line,
+          date: row.date,
+          amount: row.amount,
+          label: row.label,
+          duplicate: row.duplicate,
+          existing: row.existing,
+          category: announcedCategory(row.label, rules),
+        })),
         newCount: flagged.length - duplicateCount,
         duplicateCount,
       };
@@ -300,7 +299,10 @@ export const importsRouter = base.router({
         // positives and chose to import despite the probable-duplicate flag.
         forceLines: z.array(z.int().positive()).optional(),
         // Corrections to the categories the preview announced, keyed by the
-        // same 1-based CSV lines. Untouched lines keep the rules' verdict.
+        // same 1-based CSV lines. Untouched lines keep the rules' verdict; a
+        // correction on a line that ends up skipped (a probable duplicate the
+        // user didn't force) is deliberately ignored — the row writes nothing
+        // to classify.
         categoryOverrides: categoryOverrideSchema
           .extend({ line: z.int().positive() })
           .array()
@@ -337,8 +339,10 @@ export const importsRouter = base.router({
 
         if (toImport.length > 0) {
           // Classify each incoming row by the user's rules (issue #13), so
-          // matching rows land already categorised — same rules, same order,
-          // same result as the preview announced. A correction made on the
+          // matching rows land already categorised. Rules are re-read here
+          // rather than trusted from the preview, but the two cannot diverge
+          // through the app: the preview lives in a modal dialog, so no rule
+          // can change between it and this commit. A correction made on the
           // preview screen takes precedence over the rules' verdict.
           const rules = loadApplicableRules(tx);
           tx.insert(transactions)
@@ -348,9 +352,12 @@ export const importsRouter = base.router({
                 amount: row.amount,
                 date: row.date,
                 payee: row.label,
-                categoryId: overrides.has(row.line)
-                  ? (overrides.get(row.line) ?? null)
-                  : (categorize(row.label, rules)?.categoryId ?? null),
+                categoryId: effectiveCategoryId(
+                  overrides,
+                  row.line,
+                  row.label,
+                  rules
+                ),
                 importFingerprint: row.fingerprint,
               }))
             )
@@ -404,18 +411,13 @@ export const importsRouter = base.router({
       return {
         // Explicit payload (not the internal FlaggedOfxRow) — the FITID is an
         // implementation detail, and the renderer only renders these fields.
-        rows: flagged.map((row) => {
-          const match = categorize(row.label, rules);
-          return {
-            date: row.date,
-            amount: row.amount,
-            label: row.label,
-            duplicate: row.duplicate,
-            category: match
-              ? { id: match.categoryId, name: match.categoryName }
-              : null,
-          };
-        }),
+        rows: flagged.map((row) => ({
+          date: row.date,
+          amount: row.amount,
+          label: row.label,
+          duplicate: row.duplicate,
+          category: announcedCategory(row.label, rules),
+        })),
         newCount: flagged.length - duplicateCount,
         duplicateCount,
       };
@@ -434,7 +436,9 @@ export const importsRouter = base.router({
         content: z.string(),
         // Corrections to the categories the preview announced, keyed by the
         // row's 0-based position in the statement — the order `previewOfx`
-        // reported. Untouched rows keep the rules' verdict.
+        // reported. Untouched rows keep the rules' verdict; a correction on a
+        // row that ends up skipped as a duplicate is deliberately ignored —
+        // the row writes nothing to classify.
         categoryOverrides: categoryOverrideSchema
           .extend({ index: z.int().nonnegative() })
           .array()
@@ -475,9 +479,12 @@ export const importsRouter = base.router({
                 amount: row.amount,
                 date: row.date,
                 payee: row.label || null,
-                categoryId: overrides.has(index)
-                  ? (overrides.get(index) ?? null)
-                  : (categorize(row.label, rules)?.categoryId ?? null),
+                categoryId: effectiveCategoryId(
+                  overrides,
+                  index,
+                  row.label,
+                  rules
+                ),
                 importExternalId: row.fitid,
               }))
             )

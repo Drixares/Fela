@@ -22,7 +22,8 @@ import {
   WandIcon
 } from 'lucide-react'
 
-import { type Category, type Rule, orpc } from '../../lib/orpc'
+import { flattenCategories } from '../../lib/categories'
+import { type Rule, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
 import { DeleteRuleDialog } from './DeleteRuleDialog'
 import { RuleFormDialog } from './RuleFormDialog'
@@ -104,10 +105,7 @@ export function RulesPanel(): React.JSX.Element {
 
   const reorder = useMutation(orpc.rules.reorder.mutationOptions())
 
-  const categories: Category[] = [
-    ...(categoriesOverview?.groups ?? []).flatMap((group) => group.categories),
-    ...(categoriesOverview?.ungrouped ?? [])
-  ]
+  const categories = flattenCategories(categoriesOverview)
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]))
 
   /** Swap the rule with its neighbour and persist the whole new order — the
