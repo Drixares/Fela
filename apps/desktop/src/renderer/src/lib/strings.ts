@@ -143,8 +143,17 @@ export const strings = {
   transactions: {
     title: 'Transactions',
     empty: 'Aucune transaction pour l’instant.',
-    emptyHint: 'Saisissez un mouvement — une dépense en espèces, un virement reçu…',
+    // First-launch guidance (issue #17): lead with the import — the fast path to
+    // a first pie chart — then the manual fallback.
+    emptyHint:
+      'Importez un relevé bancaire (CSV) ou saisissez un premier mouvement pour voir où part votre argent.',
     emptyNoAccounts: 'Créez d’abord un compte pour pouvoir saisir des transactions.',
+    // Shown on the « aucun compte » empty state: sends the user up to the accounts
+    // section, where the account gets created, so the parcours never dead-ends.
+    goToAccounts: 'Créer un compte',
+    // Once the ledger holds transactions, invite the user to the breakdown report
+    // — the first-launch payoff (« premier camembert », issue #17).
+    viewReport: 'Voir la répartition',
     count: (n: number) => `${n} transaction${n > 1 ? 's' : ''}`,
     add: 'Ajouter une transaction',
     edit: 'Modifier',
@@ -470,6 +479,9 @@ export const strings = {
       `${percent.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`,
     empty: 'Aucune dépense sur cette période.',
     emptyHint: 'Choisissez une autre période, ou importez et catégorisez des transactions.',
+    // First-launch call-to-action (issue #17): scrolls to the transactions
+    // section, where a relevé can be imported or a mouvement saisi.
+    emptyAction: 'Ajouter des transactions',
     // Drill-down: group → categories → transactions.
     back: 'Retour',
     drillGroup: (name: string) => `Détail : ${name}`,
@@ -490,6 +502,8 @@ export const strings = {
     deficit: 'Déficit',
     empty: 'Aucun mouvement catégorisé sur cette période.',
     emptyHint: 'Choisissez une autre période, ou classez vos transactions en revenus et dépenses.',
+    // First-launch call-to-action (issue #17): scrolls to the transactions section.
+    emptyAction: 'Ajouter des transactions',
     // Uncategorized movements carry no revenu/dépense type, so they count on
     // neither side — surfaced so an incomplete cash flow is never mistaken for a
     // complete one (like the « Non classé » segment of the group breakdown).

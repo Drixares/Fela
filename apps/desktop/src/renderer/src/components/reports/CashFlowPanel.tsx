@@ -1,6 +1,8 @@
+import { Button } from '@repo/ui/components/button'
 import { Card } from '@repo/ui/components/card'
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -8,11 +10,12 @@ import {
 } from '@repo/ui/components/empty'
 import { Skeleton } from '@repo/ui/components/skeleton'
 import { useQuery } from '@tanstack/react-query'
-import { TrendingUpDownIcon, TriangleAlertIcon } from 'lucide-react'
+import { FileUpIcon, TrendingUpDownIcon, TriangleAlertIcon } from 'lucide-react'
 import { useCallback, useState } from 'react'
 
 import { formatMonthKey } from '../../lib/datetime'
 import { formatEur } from '../../lib/money'
+import { SECTIONS, scrollToSection } from '../../lib/navigation'
 import { type CashFlowMonthSegment, type MonthlyCashFlow, orpc } from '../../lib/orpc'
 import type { Period } from '../../lib/period'
 import { strings } from '../../lib/strings'
@@ -165,6 +168,12 @@ function CashFlowReport({ data }: { data: MonthlyCashFlow | undefined }): React.
           <EmptyTitle>{c.empty}</EmptyTitle>
           <EmptyDescription>{c.emptyHint}</EmptyDescription>
         </EmptyHeader>
+        <EmptyContent>
+          <Button variant="outline" onClick={() => scrollToSection(SECTIONS.transactions)}>
+            <FileUpIcon />
+            {c.emptyAction}
+          </Button>
+        </EmptyContent>
       </Empty>
     )
   }

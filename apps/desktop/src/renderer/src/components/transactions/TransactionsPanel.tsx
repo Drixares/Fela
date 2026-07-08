@@ -28,16 +28,19 @@ import {
   FileUpIcon,
   FilterXIcon,
   PencilIcon,
+  PieChartIcon,
   PlusIcon,
   SearchIcon,
   SparklesIcon,
   Trash2Icon,
+  WalletIcon,
   WandIcon
 } from 'lucide-react'
 
 import { flattenCategories } from '../../lib/categories'
 import { formatDate, fromDateInputValue, fromDateInputValueEndOfDay } from '../../lib/datetime'
 import { formatEur, parseEurToCents } from '../../lib/money'
+import { SECTIONS, scrollToSection } from '../../lib/navigation'
 import { type Transaction, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
 import { CategorySelectOptions, NO_CATEGORY } from '../categories/CategorySelectOptions'
@@ -286,8 +289,12 @@ export function TransactionsPanel(): React.JSX.Element {
     ...Object.fromEntries(leafCategories.map((c) => [String(c.id), c.name]))
   }
 
+  // Once the ledger holds transactions, offer the jump to the breakdown report —
+  // the first-launch payoff, « le premier camembert » (issue #17).
+  const hasTransactions = (list?.count ?? 0) > 0
+
   return (
-    <section className="flex flex-col gap-3">
+    <section id={SECTIONS.transactions} className="flex flex-col gap-3">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium tracking-wide uppercase">{t.title}</h2>
@@ -304,6 +311,12 @@ export function TransactionsPanel(): React.JSX.Element {
         </div>
         {hasAccounts && (
           <div className="flex items-center gap-2">
+            {hasTransactions && (
+              <Button size="sm" variant="ghost" onClick={() => scrollToSection(SECTIONS.reports)}>
+                <PieChartIcon />
+                {t.viewReport}
+              </Button>
+            )}
             <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
               <FileUpIcon />
               {importStrings.add}
@@ -433,6 +446,12 @@ export function TransactionsPanel(): React.JSX.Element {
             <EmptyTitle>{t.empty}</EmptyTitle>
             <EmptyDescription>{t.emptyNoAccounts}</EmptyDescription>
           </EmptyHeader>
+          <EmptyContent>
+            <Button onClick={() => scrollToSection(SECTIONS.accounts)}>
+              <WalletIcon />
+              {t.goToAccounts}
+            </Button>
+          </EmptyContent>
         </Empty>
       ) : rows.length === 0 && hasActiveFilters ? (
         <Empty>
@@ -459,11 +478,19 @@ export function TransactionsPanel(): React.JSX.Element {
             <EmptyTitle>{t.empty}</EmptyTitle>
             <EmptyDescription>{t.emptyHint}</EmptyDescription>
           </EmptyHeader>
+          {/* Import leads (the fast path to a first pie chart), manual entry is
+              the secondary fallback — see issue #17. */}
           <EmptyContent>
-            <Button onClick={openCreate}>
-              <PlusIcon />
-              {t.add}
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button onClick={() => setImportOpen(true)}>
+                <FileUpIcon />
+                {importStrings.add}
+              </Button>
+              <Button variant="outline" onClick={openCreate}>
+                <PlusIcon />
+                {t.add}
+              </Button>
+            </div>
           </EmptyContent>
         </Empty>
       ) : (

@@ -16,6 +16,7 @@ import { Skeleton } from '@repo/ui/components/skeleton'
 import { ArchiveIcon, PencilIcon, PlusIcon, WalletIcon } from 'lucide-react'
 
 import { formatEur } from '../../lib/money'
+import { SECTIONS } from '../../lib/navigation'
 import { type Account, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
 import { AccountFormDialog } from './AccountFormDialog'
@@ -63,7 +64,7 @@ export function AccountsPanel(): React.JSX.Element {
   const total = accounts?.reduce((sum, account) => sum + account.balance, 0) ?? 0
 
   return (
-    <section className="flex flex-col gap-3">
+    <section id={SECTIONS.accounts} className="flex flex-col gap-3">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium tracking-wide uppercase">{t.title}</h2>
