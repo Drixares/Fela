@@ -904,3 +904,242 @@ test("an invalid OFX import is refused with a clear error and writes nothing", a
   const list = await call(appRouter.transactions.list, undefined, { context });
   expect(list.transactions).toHaveLength(0);
 });
+
+// --- Rules at import (issue #13) ---------------------------------------------
+
+/** Create a category and return its id — a fixture for the rule tests. */
+async function makeCategory(
+  context: ServerContext,
+  name: string
+): Promise<number> {
+  const category = await call(
+    appRouter.categories.create,
+    { name, kind: "expense" },
+    { context }
+  );
+  return category.id;
+}
+
+test("a rule created before a CSV import classifies the matching rows on commit", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const groceriesId = await makeCategory(context, "Courses");
+
+  // Lower-case pattern on purpose: matching is case-insensitive.
+  await call(
+    appRouter.rules.create,
+    { pattern: "carrefour", categoryId: groceriesId },
+    { context }
+  );
+
+  await call(
+    appRouter.imports.commit,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+
+  const list = await call(
+    appRouter.transactions.list,
+    { accountId },
+    { context }
+  );
+  expect(list.transactions.map((t) => [t.payee, t.categoryId])).toEqual([
+    ["BOULANGERIE PAUL", null], // most recent first
+    ["VIREMENT EMPLOYEUR", null],
+    ["CARREFOUR", groceriesId],
+  ]);
+});
+
+test("imports.preview announces the category each rule will apply to each incoming row", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const groceriesId = await makeCategory(context, "Courses");
+
+  await call(
+    appRouter.rules.create,
+    { pattern: "CARREFOUR", categoryId: groceriesId },
+    { context }
+  );
+
+  const preview = await call(
+    appRouter.imports.preview,
+    { accountId, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+
+  expect(preview.rows.map((row) => [row.label, row.category])).toEqual([
+    ["CARREFOUR", { id: groceriesId, name: "Courses" }],
+    ["VIREMENT EMPLOYEUR", null],
+    ["BOULANGERIE PAUL", null],
+  ]);
+});
+
+test("two rules matching the same label are resolved by application order — reordering flips the winner", async () => {
+  const context = createTestContext();
+  const groceriesId = await makeCategory(context, "Courses");
+  const supermarketId = await makeCategory(context, "Supermarché");
+
+  // Both rules match "CARREFOUR": the broader one is created first, so it wins.
+  const broad = await call(
+    appRouter.rules.create,
+    { pattern: "CARREF", categoryId: groceriesId },
+    { context }
+  );
+  const narrow = await call(
+    appRouter.rules.create,
+    { pattern: "CARREFOUR", categoryId: supermarketId },
+    { context }
+  );
+
+  const firstAccount = await makeAccount(context, "Compte A");
+  await call(
+    appRouter.imports.commit,
+    { accountId: firstAccount, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+  let list = await call(
+    appRouter.transactions.list,
+    { accountId: firstAccount, search: "CARREFOUR" },
+    { context }
+  );
+  expect(list.transactions.map((t) => t.categoryId)).toEqual([groceriesId]);
+
+  // Move the narrow rule first: the same import now classifies the other way.
+  await call(
+    appRouter.rules.reorder,
+    { orderedIds: [narrow.id, broad.id] },
+    { context }
+  );
+
+  const secondAccount = await makeAccount(context, "Compte B");
+  const preview = await call(
+    appRouter.imports.preview,
+    { accountId: secondAccount, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+  expect(preview.rows[0]).toMatchObject({
+    label: "CARREFOUR",
+    category: { id: supermarketId, name: "Supermarché" },
+  });
+
+  await call(
+    appRouter.imports.commit,
+    { accountId: secondAccount, content: BANK_CSV, mapping: BANK_MAPPING },
+    { context }
+  );
+  list = await call(
+    appRouter.transactions.list,
+    { accountId: secondAccount, search: "CARREFOUR" },
+    { context }
+  );
+  expect(list.transactions.map((t) => t.categoryId)).toEqual([supermarketId]);
+});
+
+test("imports.commit lets the user correct the announced categories before validating", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const groceriesId = await makeCategory(context, "Courses");
+  const bakeryId = await makeCategory(context, "Boulangerie");
+
+  await call(
+    appRouter.rules.create,
+    { pattern: "CARREFOUR", categoryId: groceriesId },
+    { context }
+  );
+
+  // The user un-classifies the rule's match (line 2) and classifies a row no
+  // rule matched (line 4); the untouched row keeps the rules' verdict.
+  await call(
+    appRouter.imports.commit,
+    {
+      accountId,
+      content: BANK_CSV,
+      mapping: BANK_MAPPING,
+      categoryOverrides: [
+        { line: 2, categoryId: null },
+        { line: 4, categoryId: bakeryId },
+      ],
+    },
+    { context }
+  );
+
+  const list = await call(
+    appRouter.transactions.list,
+    { accountId },
+    { context }
+  );
+  expect(list.transactions.map((t) => [t.payee, t.categoryId])).toEqual([
+    ["BOULANGERIE PAUL", bakeryId], // most recent first
+    ["VIREMENT EMPLOYEUR", null],
+    ["CARREFOUR", null],
+  ]);
+});
+
+test("imports.commit refuses a category correction pointing at a category that does not exist", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+
+  await expect(
+    call(
+      appRouter.imports.commit,
+      {
+        accountId,
+        content: BANK_CSV,
+        mapping: BANK_MAPPING,
+        categoryOverrides: [{ line: 2, categoryId: 999 }],
+      },
+      { context }
+    )
+  ).rejects.toThrowError(/no category with id 999/i);
+
+  // The refused import wrote nothing.
+  const list = await call(appRouter.transactions.list, undefined, { context });
+  expect(list.transactions).toHaveLength(0);
+});
+
+test("OFX preview announces the rules' categories and commit applies them, with per-row corrections", async () => {
+  const context = createTestContext();
+  const accountId = await makeAccount(context);
+  const groceriesId = await makeCategory(context, "Courses");
+  const bakeryId = await makeCategory(context, "Boulangerie");
+
+  await call(
+    appRouter.rules.create,
+    { pattern: "carrefour", categoryId: groceriesId },
+    { context }
+  );
+
+  const preview = await call(
+    appRouter.imports.previewOfx,
+    { accountId, content: BANK_OFX },
+    { context }
+  );
+  expect(preview.rows.map((row) => [row.label, row.category])).toEqual([
+    ["CARREFOUR", { id: groceriesId, name: "Courses" }],
+    ["VIREMENT EMPLOYEUR", null],
+    ["BOULANGERIE PAUL", null],
+  ]);
+
+  // The user classifies the bakery row (index 2, as previewed) by hand; the
+  // rule's match keeps its announced category.
+  await call(
+    appRouter.imports.commitOfx,
+    {
+      accountId,
+      content: BANK_OFX,
+      categoryOverrides: [{ index: 2, categoryId: bakeryId }],
+    },
+    { context }
+  );
+
+  const list = await call(
+    appRouter.transactions.list,
+    { accountId },
+    { context }
+  );
+  expect(list.transactions.map((t) => [t.payee, t.categoryId])).toEqual([
+    ["BOULANGERIE PAUL", bakeryId], // most recent first
+    ["VIREMENT EMPLOYEUR", null],
+    ["CARREFOUR", groceriesId],
+  ]);
+});

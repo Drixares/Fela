@@ -1,5 +1,10 @@
 import { ORPCError } from "@orpc/server";
-import { categories, categoryGroups, transactions } from "@repo/db";
+import {
+  categories,
+  categorizationRules,
+  categoryGroups,
+  transactions,
+} from "@repo/db";
 import type { Category, CategoryGroup, Db } from "@repo/db";
 import { asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -252,8 +257,13 @@ export const categoriesRouter = base.router({
    * - with `reassignToId`, every such transaction moves to that category;
    * - without it, they become uncategorised (`categoryId` set to null).
    *
-   * The re-point and the delete run in one SQL transaction, so a transaction
-   * can never be left pointing at a category that no longer exists.
+   * Categorization rules targeting the category follow the same reassignment;
+   * without one they are deleted — a rule cannot file rows under nothing (see
+   * issue #13).
+   *
+   * The re-point and the delete run in one SQL transaction, so neither a
+   * transaction nor a rule can ever be left pointing at a category that no
+   * longer exists.
    *
    * @returns the deleted id and how many transactions were re-pointed.
    */
@@ -284,6 +294,16 @@ export const categoriesRouter = base.router({
           .set({ categoryId: input.reassignToId ?? null })
           .where(eq(transactions.categoryId, input.id))
           .run();
+        if (input.reassignToId !== undefined) {
+          tx.update(categorizationRules)
+            .set({ categoryId: input.reassignToId })
+            .where(eq(categorizationRules.categoryId, input.id))
+            .run();
+        } else {
+          tx.delete(categorizationRules)
+            .where(eq(categorizationRules.categoryId, input.id))
+            .run();
+        }
         tx.delete(categories).where(eq(categories.id, input.id)).run();
         return affected.changes;
       });

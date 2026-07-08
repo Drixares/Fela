@@ -230,6 +230,56 @@ export const strings = {
       deleteError: 'Impossible de supprimer la transaction.'
     }
   },
+  rules: {
+    // Categorization rules (see issue #13): « si le libellé contient X →
+    // catégorie Y », applied to incoming rows at import time, first match wins.
+    title: 'Règles de catégorisation',
+    empty: 'Aucune règle pour l’instant.',
+    emptyHint:
+      'Créez une règle « le libellé contient… » pour classer automatiquement vos prochains imports.',
+    emptyNoCategories: 'Créez d’abord une catégorie pour pouvoir définir des règles.',
+    add: 'Ajouter une règle',
+    edit: 'Modifier',
+    delete: 'Supprimer',
+    moveUp: 'Monter',
+    moveDown: 'Descendre',
+    // How a rule reads in the list: the pattern, then the category it applies.
+    patternPrefix: 'Le libellé contient',
+    orderHint: 'Les règles s’appliquent de haut en bas : la première qui correspond gagne.',
+    deletedCategory: 'Catégorie supprimée',
+    form: {
+      createTitle: 'Nouvelle règle',
+      createDescription:
+        'Classez automatiquement les transactions importées dont le libellé contient un texte.',
+      editTitle: 'Modifier la règle',
+      editDescription: 'Corrigez le texte recherché ou la catégorie appliquée.',
+      patternLabel: 'Le libellé contient',
+      patternPlaceholder: 'CARREFOUR',
+      patternHint: 'La casse est ignorée : « carrefour » retrouve « CARREFOUR MARKET ».',
+      categoryLabel: 'Catégorie appliquée',
+      categoryPlaceholder: 'Choisir une catégorie',
+      submitCreate: 'Créer la règle',
+      submitEdit: 'Enregistrer',
+      cancel: 'Annuler',
+      patternRequired: 'Le texte recherché est requis.',
+      categoryRequired: 'Choisissez une catégorie.'
+    },
+    deleteDialog: {
+      title: 'Supprimer cette règle ?',
+      description: (pattern: string) =>
+        `« ${pattern} » ne sera plus appliquée aux prochains imports. Les transactions déjà classées ne changent pas.`,
+      confirm: 'Supprimer',
+      cancel: 'Annuler'
+    },
+    toast: {
+      created: 'Règle créée.',
+      updated: 'Règle modifiée.',
+      deleted: 'Règle supprimée.',
+      saveError: 'Impossible d’enregistrer la règle.',
+      deleteError: 'Impossible de supprimer la règle.',
+      reorderError: 'Impossible de réordonner les règles.'
+    }
+  },
   imports: {
     // CSV import flow (see issue #8): pick a file and an account, map the
     // columns on the first import, preview, then validate.
@@ -273,6 +323,11 @@ export const strings = {
       importedRowLabel: 'Cette ligne',
       existingRowLabel: 'Transaction existante',
       forceLabel: 'Importer quand même (ce n’est pas un doublon)',
+      // The category a rule (or the user's correction) will file the row
+      // under — shown as a per-row select so the classification is corrigible
+      // before validating rather than after (see issue #13).
+      categorySelectLabel: (label: string) => `Catégorie appliquée à « ${label} »`,
+      noCategory: 'Sans catégorie',
       // Count reflects new rows plus the probable duplicates the user forced.
       submit: (added: number) => `Importer ${added} transaction${added > 1 ? 's' : ''}`
     },

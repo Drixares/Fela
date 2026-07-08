@@ -1,10 +1,11 @@
 import { ORPCError } from "@orpc/server";
-import { accounts, importMappings, transactions } from "@repo/db";
+import { accounts, categories, importMappings, transactions } from "@repo/db";
 import type { Db } from "@repo/db";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { base } from "../../context.js";
+import { categorize, loadApplicableRules } from "../rules/matching.js";
 import {
   CsvImportError,
   flagWithMatches,
@@ -34,6 +35,39 @@ function assertAccountExists(db: Db, id: number): void {
   if (!account) {
     throw new ORPCError("NOT_FOUND", { message: `No account with id ${id}` });
   }
+}
+
+/**
+ * The user's per-row corrections to the categories the rules announced in the
+ * preview (issue #13), keyed by the same row identity the preview reported
+ * (CSV line / OFX row index). `categoryId: null` un-classifies a row a rule
+ * matched; an id classifies the row under that category instead.
+ */
+const categoryOverrideSchema = z.object({ categoryId: idSchema.nullable() });
+
+/**
+ * Throw NOT_FOUND unless every category named by the overrides exists — a
+ * dangling correction would classify rows under a category no report can show.
+ * Returns the corrections as a lookup by row key.
+ */
+function resolveOverrides<K>(
+  db: Db,
+  overrides: { key: K; categoryId: number | null }[]
+): Map<K, number | null> {
+  for (const override of overrides) {
+    if (override.categoryId === null) continue;
+    const category = db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.id, override.categoryId))
+      .get();
+    if (!category) {
+      throw new ORPCError("NOT_FOUND", {
+        message: `No category with id ${override.categoryId}`,
+      });
+    }
+  }
+  return new Map(overrides.map((o) => [o.key, o.categoryId]));
 }
 
 /**
@@ -222,19 +256,29 @@ export const importsRouter = base.router({
 
       const flagged = matchAgainstStored(context.db, input.accountId, rows);
       const duplicateCount = flagged.filter((row) => row.duplicate).length;
+      // Announce the category each rule will assign (issue #13) — id for the
+      // commit, name for the screen — so the user corrects the classification
+      // before validating rather than after.
+      const rules = loadApplicableRules(context.db);
       return {
         // Explicit payload (not the internal MatchedRow) — the fingerprint is
         // an implementation detail, and the renderer only renders these. Each
         // probable duplicate carries the stored transaction it collided with,
         // so the user can unfold it, judge it, and force a false positive in.
-        rows: flagged.map((row) => ({
-          line: row.line,
-          date: row.date,
-          amount: row.amount,
-          label: row.label,
-          duplicate: row.duplicate,
-          existing: row.existing,
-        })),
+        rows: flagged.map((row) => {
+          const match = categorize(row.label, rules);
+          return {
+            line: row.line,
+            date: row.date,
+            amount: row.amount,
+            label: row.label,
+            duplicate: row.duplicate,
+            existing: row.existing,
+            category: match
+              ? { id: match.categoryId, name: match.categoryName }
+              : null,
+          };
+        }),
         newCount: flagged.length - duplicateCount,
         duplicateCount,
       };
@@ -255,10 +299,23 @@ export const importsRouter = base.router({
         // CSV lines (1-based, as `preview` reports them) the user judged false
         // positives and chose to import despite the probable-duplicate flag.
         forceLines: z.array(z.int().positive()).optional(),
+        // Corrections to the categories the preview announced, keyed by the
+        // same 1-based CSV lines. Untouched lines keep the rules' verdict.
+        categoryOverrides: categoryOverrideSchema
+          .extend({ line: z.int().positive() })
+          .array()
+          .optional(),
       })
     )
     .handler(async ({ context, input }) => {
       assertAccountExists(context.db, input.accountId);
+      const overrides = resolveOverrides(
+        context.db,
+        (input.categoryOverrides ?? []).map((o) => ({
+          key: o.line,
+          categoryId: o.categoryId,
+        }))
+      );
       const mapping = resolveMapping(
         context.db,
         input.accountId,
@@ -279,6 +336,11 @@ export const importsRouter = base.router({
         );
 
         if (toImport.length > 0) {
+          // Classify each incoming row by the user's rules (issue #13), so
+          // matching rows land already categorised — same rules, same order,
+          // same result as the preview announced. A correction made on the
+          // preview screen takes precedence over the rules' verdict.
+          const rules = loadApplicableRules(tx);
           tx.insert(transactions)
             .values(
               toImport.map((row) => ({
@@ -286,6 +348,9 @@ export const importsRouter = base.router({
                 amount: row.amount,
                 date: row.date,
                 payee: row.label,
+                categoryId: overrides.has(row.line)
+                  ? (overrides.get(row.line) ?? null)
+                  : (categorize(row.label, rules)?.categoryId ?? null),
                 importFingerprint: row.fingerprint,
               }))
             )
@@ -332,15 +397,25 @@ export const importsRouter = base.router({
 
       const flagged = flagOfxAgainstStored(context.db, input.accountId, rows);
       const duplicateCount = flagged.filter((row) => row.duplicate).length;
+      // Announce the category each rule will assign (issue #13) — id for the
+      // commit, name for the screen — so the user corrects the classification
+      // before validating rather than after.
+      const rules = loadApplicableRules(context.db);
       return {
         // Explicit payload (not the internal FlaggedOfxRow) — the FITID is an
         // implementation detail, and the renderer only renders these fields.
-        rows: flagged.map((row) => ({
-          date: row.date,
-          amount: row.amount,
-          label: row.label,
-          duplicate: row.duplicate,
-        })),
+        rows: flagged.map((row) => {
+          const match = categorize(row.label, rules);
+          return {
+            date: row.date,
+            amount: row.amount,
+            label: row.label,
+            duplicate: row.duplicate,
+            category: match
+              ? { id: match.categoryId, name: match.categoryName }
+              : null,
+          };
+        }),
         newCount: flagged.length - duplicateCount,
         duplicateCount,
       };
@@ -353,25 +428,56 @@ export const importsRouter = base.router({
    * re-importing an overlapping period never creates doubles.
    */
   commitOfx: base
-    .input(z.object({ accountId: idSchema, content: z.string() }))
+    .input(
+      z.object({
+        accountId: idSchema,
+        content: z.string(),
+        // Corrections to the categories the preview announced, keyed by the
+        // row's 0-based position in the statement — the order `previewOfx`
+        // reported. Untouched rows keep the rules' verdict.
+        categoryOverrides: categoryOverrideSchema
+          .extend({ index: z.int().nonnegative() })
+          .array()
+          .optional(),
+      })
+    )
     .handler(async ({ context, input }) => {
       assertAccountExists(context.db, input.accountId);
+      const overrides = resolveOverrides(
+        context.db,
+        (input.categoryOverrides ?? []).map((o) => ({
+          key: o.index,
+          categoryId: o.categoryId,
+        }))
+      );
       const rows = readOfxRows(input.content);
 
       return context.db.transaction((tx) => {
         // Flag inside the transaction, against the same snapshot the inserts
         // will see, so a commit racing another write can't double-import.
         const flagged = flagOfxAgainstStored(tx, input.accountId, rows);
-        const fresh = flagged.filter((row) => !row.duplicate);
+        // Keep each row's position in the full statement before dropping the
+        // duplicates: overrides are keyed by that position (the order the
+        // preview reported), so they still land right when duplicates are
+        // interleaved.
+        const fresh = flagged
+          .map((row, index) => ({ row, index }))
+          .filter(({ row }) => !row.duplicate);
 
         if (fresh.length > 0) {
+          // Classify each incoming row by the user's rules (issue #13); a
+          // correction made on the preview screen takes precedence.
+          const rules = loadApplicableRules(tx);
           tx.insert(transactions)
             .values(
-              fresh.map((row) => ({
+              fresh.map(({ row, index }) => ({
                 accountId: input.accountId,
                 amount: row.amount,
                 date: row.date,
                 payee: row.label || null,
+                categoryId: overrides.has(index)
+                  ? (overrides.get(index) ?? null)
+                  : (categorize(row.label, rules)?.categoryId ?? null),
                 importExternalId: row.fitid,
               }))
             )
