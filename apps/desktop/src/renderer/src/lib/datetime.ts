@@ -23,6 +23,30 @@ export function formatDate(date: Date): string {
   return dateFormatter.format(date)
 }
 
+const monthShortFormatter = new Intl.DateTimeFormat('fr-FR', {
+  month: 'short',
+  year: '2-digit',
+  timeZone: 'UTC'
+})
+
+const monthLongFormatter = new Intl.DateTimeFormat('fr-FR', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC'
+})
+
+/**
+ * Format a `YYYY-MM` month key (as `reports.cashFlow` returns them, in UTC) into
+ * a French month label. `long` gives « mars 2026 » for tooltips; the default
+ * short form gives « mars 26 » for a compact axis. Formatted in UTC so the month
+ * never shifts across a timezone boundary the way a local parse could.
+ */
+export function formatMonthKey(key: string, variant: 'short' | 'long' = 'short'): string {
+  const [year, month] = key.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, 1))
+  return (variant === 'long' ? monthLongFormatter : monthShortFormatter).format(date)
+}
+
 /**
  * A date as `yyyy-mm-dd` in the local timezone — the value a native
  * `<input type="date">` expects. Built from the local parts (not `toISOString`,

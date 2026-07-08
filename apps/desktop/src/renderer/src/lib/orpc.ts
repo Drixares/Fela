@@ -46,6 +46,15 @@ export type Transaction = TransactionList['transactions'][number]
 export type ExpensesByGroup = Awaited<ReturnType<AppRouterClient['reports']['byGroup']>>
 export type ExpenseGroupSegment = ExpensesByGroup['groups'][number]
 
+/**
+ * The monthly cash flow the renderer receives from `reports.cashFlow` (see issue
+ * #16) — one bucket per calendar month over the period (income vs expenses, in
+ * positive cents) plus the period totals. Inferred from the client contract so
+ * it can never drift from what the procedure returns.
+ */
+export type MonthlyCashFlow = Awaited<ReturnType<AppRouterClient['reports']['cashFlow']>>
+export type CashFlowMonthSegment = MonthlyCashFlow['months'][number]
+
 const { port1: clientPort, port2: serverPort } = new MessageChannel()
 
 window.postMessage('start-orpc-client', '*', [serverPort])
