@@ -63,9 +63,30 @@ export interface ImportsApi {
   chooseCsvFile(): Promise<ChosenCsvFile | null>
 }
 
+/**
+ * A generated data export, ready to be written to disk: the suggested file
+ * name and the full content as a string. Produced by the `exports.*` oRPC
+ * procedures; the renderer forwards it verbatim — writing the file is the main
+ * process's job and ends here (see the V1 PRD, #1, and issue #10).
+ */
+export interface ExportFileToSave {
+  fileName: string
+  content: string
+}
+
+/** The exports surface exposed on `window.api.exports` in the renderer. */
+export interface ExportsApi {
+  /**
+   * Prompt for a destination (native save dialog) and write the file there.
+   * Resolves `true` once written, `false` if the user cancelled.
+   */
+  saveFile(file: ExportFileToSave): Promise<boolean>
+}
+
 /** The full preload API surface bridged to the renderer. */
 export interface FelaApi {
   backups: BackupsApi
+  exports: ExportsApi
   imports: ImportsApi
 }
 
@@ -79,4 +100,8 @@ export const BACKUP_CHANNELS = {
 
 export const IMPORT_CHANNELS = {
   chooseCsvFile: 'imports:chooseCsvFile'
+} as const
+
+export const EXPORT_CHANNELS = {
+  saveFile: 'exports:saveFile'
 } as const
