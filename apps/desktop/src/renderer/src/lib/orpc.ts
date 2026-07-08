@@ -37,6 +37,15 @@ export type Rule = Awaited<ReturnType<AppRouterClient['rules']['list']>>[number]
 export type TransactionList = Awaited<ReturnType<AppRouterClient['transactions']['list']>>
 export type Transaction = TransactionList['transactions'][number]
 
+/**
+ * The top-level expense breakdown the renderer receives from `reports.byGroup`
+ * (see issue #14) — one segment per category group (a `null` group being the
+ * « Sans groupe » bucket) plus the « Non classé » uncategorized total. Inferred
+ * from the client contract so it can never drift from what the procedure returns.
+ */
+export type ExpensesByGroup = Awaited<ReturnType<AppRouterClient['reports']['byGroup']>>
+export type ExpenseGroupSegment = ExpensesByGroup['groups'][number]
+
 const { port1: clientPort, port2: serverPort } = new MessageChannel()
 
 window.postMessage('start-orpc-client', '*', [serverPort])

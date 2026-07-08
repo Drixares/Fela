@@ -415,6 +415,39 @@ export const strings = {
       error: 'Impossible d’exporter les données.'
     }
   },
+  reports: {
+    title: 'Répartition des dépenses',
+    subtitle: 'Où part mon argent ? Vos dépenses par groupe sur la période choisie.',
+    // Every visible label for the shared period selector (see lib/period.ts).
+    period: {
+      thisMonth: 'Ce mois',
+      lastMonth: 'Mois dernier',
+      last3: '3 mois',
+      last6: '6 mois',
+      last12: '12 mois',
+      custom: 'Personnalisée',
+      fromLabel: 'Du',
+      toLabel: 'Au',
+      invalid: 'La date de début doit précéder la date de fin.'
+    },
+    total: 'Total des dépenses',
+    // The « Sans groupe » bucket (categorized, but the category has no group)
+    // and the « Non classé » segment (no category at all) are distinct.
+    ungrouped: 'Sans groupe',
+    uncategorized: 'Non classé',
+    uncategorizedHint:
+      'Des transactions de la période ne sont pas catégorisées — le rapport est incomplet.',
+    share: (percent: number) =>
+      `${percent.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`,
+    empty: 'Aucune dépense sur cette période.',
+    emptyHint: 'Choisissez une autre période, ou importez et catégorisez des transactions.',
+    // Drill-down: group → categories → transactions.
+    back: 'Retour',
+    drillGroup: (name: string) => `Détail : ${name}`,
+    drillCategory: (name: string) => `Transactions : ${name}`,
+    txCount: (n: number) => `${n} transaction${n > 1 ? 's' : ''}`,
+    noPayee: 'Sans libellé'
+  },
   versions: {
     electron: (version: string | undefined) => `Electron v${version ?? ''}`,
     chromium: (version: string | undefined) => `Chromium v${version ?? ''}`,

@@ -52,5 +52,11 @@ export function listFilterClause(
     conditions.push(sql`abs(${transactions.amount}) <= ${input.maxAmount}`);
   }
 
+  if (input.direction === "outflow") {
+    conditions.push(sql`${transactions.amount} < 0`);
+  } else if (input.direction === "inflow") {
+    conditions.push(sql`${transactions.amount} > 0`);
+  }
+
   return and(...conditions);
 }
