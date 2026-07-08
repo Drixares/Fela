@@ -1,11 +1,15 @@
-import { ORPCError } from "@orpc/server";
-import { accounts, getAccountBalance, getAccountBalances } from "@repo/db";
+import { call, ORPCError } from "@orpc/server";
 import type { Account, Db } from "@repo/db";
-import { asc, eq } from "drizzle-orm";
+import { accounts, getAccountBalance } from "@repo/db";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { ACCOUNT_TYPES } from "../../client.js";
 import { base } from "../../context.js";
+import {
+  listAccountsBase,
+  listAccountsHandler,
+} from "./queries/list-accounts.js";
 
 /** An account row plus its derived balance — the shape the renderer consumes. */
 type AccountWithBalance = Account & { balance: number };
@@ -35,25 +39,10 @@ export const accountsRouter = base.router({
    * Archived accounts are hidden by default so the overview stays focused on
    * live accounts; pass `includeArchived` to bring them back for past reports.
    */
-  list: base
-    .input(z.object({ includeArchived: z.boolean().default(false) }).optional())
+  list: listAccountsBase
+    .route({ method: "GET" })
     .handler(async ({ context, input }) => {
-      const rows = await context.db
-        .select()
-        .from(accounts)
-        .orderBy(asc(accounts.name))
-        .all();
-
-      const balances = new Map(
-        getAccountBalances(context.db).map((b) => [b.accountId, b.balance])
-      );
-
-      return rows
-        .filter((account) => input?.includeArchived || !account.archived)
-        .map((account) => ({
-          ...account,
-          balance: balances.get(account.id) ?? account.initialBalance,
-        }));
+      return await call(listAccountsHandler, input, { context });
     }),
 
   /**
