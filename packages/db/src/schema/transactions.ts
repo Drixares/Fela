@@ -32,6 +32,11 @@ export const transactions = sqliteTable(
     // amount + normalised label) so re-importing an overlapping export never
     // creates doubles (see issue #8). Null on manually entered rows.
     importFingerprint: text("import_fingerprint"),
+    // Exact dedup key set on OFX-imported rows: the bank's own transaction id
+    // (FITID), unique per account by the OFX spec. Indexed and checked on import
+    // (not a DB constraint) so re-importing an overlapping period never creates
+    // doubles (see issue #11). Null on manual and CSV-imported rows.
+    importExternalId: text("import_external_id"),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -40,6 +45,7 @@ export const transactions = sqliteTable(
     index("tx_account_idx").on(t.accountId),
     index("tx_date_idx").on(t.date),
     index("tx_import_fingerprint_idx").on(t.importFingerprint),
+    index("tx_import_external_id_idx").on(t.importExternalId),
   ]
 );
 
