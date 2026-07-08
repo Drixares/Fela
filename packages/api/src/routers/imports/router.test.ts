@@ -58,10 +58,10 @@ test("imports.preview parses a French CSV and reports every row as new, without 
   });
 
   // Preview is pure computation — nothing has been written.
-  const transactions = await call(appRouter.transactions.list, undefined, {
+  const list = await call(appRouter.transactions.list, undefined, {
     context,
   });
-  expect(transactions).toHaveLength(0);
+  expect(list.transactions).toHaveLength(0);
 });
 
 test("imports.commit writes every row to the account and memorises the mapping", async () => {
@@ -124,12 +124,12 @@ test("re-importing the same CSV flags every row as a probable duplicate and writ
   );
   expect(second).toEqual({ imported: 0, duplicates: 3 });
 
-  const transactions = await call(
+  const list = await call(
     appRouter.transactions.list,
     { accountId },
     { context }
   );
-  expect(transactions).toHaveLength(3);
+  expect(list.transactions).toHaveLength(3);
 });
 
 test("importing an overlapping period only adds the rows not already stored", async () => {
@@ -168,12 +168,12 @@ test("importing an overlapping period only adds the rows not already stored", as
   );
   expect(result).toEqual({ imported: 2, duplicates: 2 });
 
-  const transactions = await call(
+  const list = await call(
     appRouter.transactions.list,
     { accountId },
     { context }
   );
-  expect(transactions).toHaveLength(5);
+  expect(list.transactions).toHaveLength(5);
 });
 
 test("the same rows imported into another account are not duplicates", async () => {
@@ -317,10 +317,10 @@ test("an invalid import is refused with a clear error and writes nothing", async
   ).rejects.toThrow(/mapping/i);
 
   // Not one of the refused imports wrote a row or memorised a mapping.
-  const transactions = await call(appRouter.transactions.list, undefined, {
+  const list = await call(appRouter.transactions.list, undefined, {
     context,
   });
-  expect(transactions).toHaveLength(0);
+  expect(list.transactions).toHaveLength(0);
   expect(
     await call(appRouter.imports.getMapping, { accountId }, { context })
   ).toBeNull();

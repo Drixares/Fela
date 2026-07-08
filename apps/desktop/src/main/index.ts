@@ -7,6 +7,7 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
 import { setupBackups } from './backups'
+import { setupExports } from './exports'
 import { setupImports } from './imports'
 import { createSettingsStore } from './settings'
 
@@ -86,6 +87,11 @@ app.whenReady().then(() => {
   // its content (never a path) to the renderer, which drives the import
   // procedures with it (see issue #8).
   setupImports()
+
+  // The native save dialog for data exports: the renderer hands over the
+  // generated content (never a path) and the main process writes the file
+  // where the user chooses (see issue #10).
+  setupExports()
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

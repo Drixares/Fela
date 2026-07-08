@@ -340,6 +340,18 @@ export const strings = {
       restoreError: 'Impossible de restaurer la sauvegarde.'
     }
   },
+  exports: {
+    title: 'Export des données',
+    description:
+      'Exportez tout votre historique — comptes, groupes, catégories et transactions — pour rester propriétaire de vos données.',
+    hint: 'Le fichier contient l’intégralité de votre base, virements identifiés.',
+    csv: 'Exporter en CSV',
+    json: 'Exporter en JSON',
+    toast: {
+      saved: 'Export enregistré.',
+      error: 'Impossible d’exporter les données.'
+    }
+  },
   versions: {
     electron: (version: string | undefined) => `Electron v${version ?? ''}`,
     chromium: (version: string | undefined) => `Chromium v${version ?? ''}`,
