@@ -13,6 +13,16 @@ export const strings = {
     name: 'Fela',
     tagline: 'Où part mon argent ?'
   },
+  nav: {
+    home: 'Home',
+    spending: 'Spending',
+    invest: 'Invest',
+    settings: 'Réglages'
+  },
+  invest: {
+    title: 'Bientôt disponible',
+    description: 'Le suivi de vos investissements arrive dans une prochaine version.'
+  },
   accounts: {
     title: 'Comptes',
     empty: "Aucun compte pour l'instant.",

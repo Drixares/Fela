@@ -40,7 +40,7 @@ import {
 import { flattenCategories } from '../../lib/categories'
 import { formatDate, fromDateInputValue, fromDateInputValueEndOfDay } from '../../lib/datetime'
 import { formatEur, parseEurToCents } from '../../lib/money'
-import { SECTIONS, scrollToSection } from '../../lib/navigation'
+import { SECTIONS, useNavigateToSection } from '../../lib/navigation'
 import { type Transaction, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
 import { CategorySelectOptions, NO_CATEGORY } from '../categories/CategorySelectOptions'
@@ -99,6 +99,7 @@ function parseAmountFilter(raw: string): { cents: number | undefined; invalid: b
  * the renderer only displays.
  */
 export function TransactionsPanel(): React.JSX.Element {
+  const navigateToSection = useNavigateToSection()
   const [accountFilter, setAccountFilter] = useState<string>(ALL_ACCOUNTS)
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORIES)
   const [search, setSearch] = useState('')
@@ -312,7 +313,7 @@ export function TransactionsPanel(): React.JSX.Element {
         {hasAccounts && (
           <div className="flex items-center gap-2">
             {hasTransactions && (
-              <Button size="sm" variant="ghost" onClick={() => scrollToSection(SECTIONS.reports)}>
+              <Button size="sm" variant="ghost" onClick={() => navigateToSection(SECTIONS.reports)}>
                 <PieChartIcon />
                 {t.viewReport}
               </Button>
@@ -447,7 +448,7 @@ export function TransactionsPanel(): React.JSX.Element {
             <EmptyDescription>{t.emptyNoAccounts}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button onClick={() => scrollToSection(SECTIONS.accounts)}>
+            <Button onClick={() => navigateToSection(SECTIONS.accounts)}>
               <WalletIcon />
               {t.goToAccounts}
             </Button>

@@ -21,7 +21,7 @@ import { useCallback, useState } from 'react'
 
 import { formatDate } from '../../lib/datetime'
 import { formatEur } from '../../lib/money'
-import { SECTIONS, scrollToSection } from '../../lib/navigation'
+import { SECTIONS, useNavigateToSection } from '../../lib/navigation'
 import type { Period } from '../../lib/period'
 import {
   type ExpenseGroupSegment,
@@ -285,6 +285,7 @@ function GroupsView({
   groupName: (segment: ExpenseGroupSegment) => string
   onDrill: (drill: Drill) => void
 }): React.JSX.Element {
+  const navigateToSection = useNavigateToSection()
   const total = byGroup?.total ?? 0
   const groups = byGroup?.groups ?? []
   const uncategorized = byGroup?.uncategorized ?? 0
@@ -328,7 +329,7 @@ function GroupsView({
         segments={segments}
         total={total}
         emptyAction={
-          <Button variant="outline" onClick={() => scrollToSection(SECTIONS.transactions)}>
+          <Button variant="outline" onClick={() => navigateToSection(SECTIONS.transactions)}>
             <FileUpIcon />
             {r.emptyAction}
           </Button>
