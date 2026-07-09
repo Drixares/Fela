@@ -35,7 +35,14 @@ const SETTINGS_NAV: NavEntry = {
 function NavLink({ entry, active }: { entry: NavEntry; active: boolean }): React.JSX.Element {
   const Icon = entry.icon
   return (
-    <Link to={entry.to} className={sidebarNavItemVariants({ active })}>
+    <Link
+      to={entry.to}
+      // Exact match so the root `/` link doesn't report aria-current on every
+      // descendant route; keeps Link's a11y state aligned with the visual
+      // `active` highlight computed from the exact pathname.
+      activeOptions={{ exact: true }}
+      className={sidebarNavItemVariants({ active })}
+    >
       <Icon />
       <span>{entry.label}</span>
     </Link>
