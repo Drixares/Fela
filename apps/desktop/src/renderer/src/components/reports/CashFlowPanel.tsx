@@ -15,7 +15,7 @@ import { useCallback, useState } from 'react'
 
 import { formatMonthKey } from '../../lib/datetime'
 import { formatEur } from '../../lib/money'
-import { SECTIONS, scrollToSection } from '../../lib/navigation'
+import { SECTIONS, useNavigateToSection } from '../../lib/navigation'
 import { type CashFlowMonthSegment, type MonthlyCashFlow, orpc } from '../../lib/orpc'
 import type { Period } from '../../lib/period'
 import { strings } from '../../lib/strings'
@@ -152,6 +152,7 @@ export function CashFlowPanel(): React.JSX.Element {
 
 /** The totals and chart, or the empty state when nothing was categorized. */
 function CashFlowReport({ data }: { data: MonthlyCashFlow | undefined }): React.JSX.Element {
+  const navigateToSection = useNavigateToSection()
   const months = data?.months ?? []
   const income = data?.income ?? 0
   const expenses = data?.expenses ?? 0
@@ -169,7 +170,7 @@ function CashFlowReport({ data }: { data: MonthlyCashFlow | undefined }): React.
           <EmptyDescription>{c.emptyHint}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button variant="outline" onClick={() => scrollToSection(SECTIONS.transactions)}>
+          <Button variant="outline" onClick={() => navigateToSection(SECTIONS.transactions)}>
             <FileUpIcon />
             {c.emptyAction}
           </Button>

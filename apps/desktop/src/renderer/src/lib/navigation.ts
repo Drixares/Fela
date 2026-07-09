@@ -1,3 +1,5 @@
+import { useRouter } from '@tanstack/react-router'
+
 /**
  * The renderer is a single scrolling page, not a router: every panel is a
  * `<section>` stacked in `App.tsx`. Onboarding leads the user from one empty
@@ -21,4 +23,38 @@ export const SECTIONS = {
  */
 export function scrollToSection(id: string): void {
   document.getElementById(id)?.scrollIntoView({ block: 'start' })
+}
+
+/**
+ * Chaque section vit désormais sur une route : « accounts » et « reports » sur
+ * Home, « transactions » sur Spending. Un CTA d'empty-state doit donc changer de
+ * vue avant de pouvoir scroller vers sa cible.
+ */
+const SECTION_ROUTE: Record<string, string> = {
+  [SECTIONS.accounts]: '/',
+  [SECTIONS.reports]: '/',
+  [SECTIONS.transactions]: '/spending'
+}
+
+/**
+ * Renvoie un callback qui amène l'utilisateur à une section : il navigue vers la
+ * route qui l'héberge (si on n'y est pas déjà) puis scrolle une fois la section
+ * montée. Sur la même route, il scrolle directement.
+ */
+export function useNavigateToSection(): (sectionId: string) => void {
+  const router = useRouter()
+  return (sectionId: string): void => {
+    const to = SECTION_ROUTE[sectionId] ?? '/'
+    if (router.state.location.pathname === to) {
+      scrollToSection(sectionId)
+      return
+    }
+    void router.navigate({ to }).then(() => {
+      // Attendre le montage de la nouvelle vue avant de scroller (deux frames
+      // pour laisser React peindre le contenu de la route).
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => scrollToSection(sectionId))
+      })
+    })
+  }
 }
