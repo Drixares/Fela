@@ -72,8 +72,10 @@ export const strings = {
       toast: {
         created: (month: string) => `Budget de ${month} créé.`,
         updated: (month: string) => `Budget de ${month} mis à jour.`,
+        seeded: (month: string) => `Budget de ${month} pré-rempli depuis le mois précédent.`,
         createError: 'Impossible de créer le budget.',
-        updateError: "Impossible d'enregistrer le budget."
+        updateError: "Impossible d'enregistrer le budget.",
+        seedError: 'Impossible de pré-remplir le budget.'
       },
       // Répartition du budget total en lignes par catégorie de dépense.
       lines: {

@@ -15,7 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { PencilIcon, PlusIcon, Trash2Icon, WalletIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
-import { currentMonthKey } from '../../lib/datetime'
+import { currentMonthKey, formatMonthKey } from '../../lib/datetime'
 import { formatEur } from '../../lib/money'
 import { type Budget, type CategoriesOverview, orpc } from '../../lib/orpc'
 import { strings } from '../../lib/strings'
@@ -55,9 +55,33 @@ export function BudgetPanel(): React.JSX.Element {
   const [editingLine, setEditingLine] = useState<EditingLine | undefined>(undefined)
   const [autoIncreaseTotal, setAutoIncreaseTotal] = useState<number | null>(null)
 
+  const queryClient = useQueryClient()
   const { data, isLoading } = useQuery(orpc.budgets.get.queryOptions({ input: { month } }))
   const { data: categoriesData } = useQuery(orpc.categories.overview.queryOptions())
   const budget = data ?? undefined
+
+  // Empty-state action: try to pre-fill from the nearest prior month. When there
+  // is none (`null`), fall back to entering the first-ever budget blank.
+  const seedFromPrevious = useMutation(orpc.budgets.seedFromPrevious.mutationOptions())
+  const onStart = (): void => {
+    seedFromPrevious.mutate(
+      { month },
+      {
+        onSuccess: (seeded) => {
+          if (seeded === null) {
+            setFormOpen(true)
+            return
+          }
+          void queryClient.invalidateQueries({ queryKey: orpc.budgets.key() })
+          toast.success(t.toast.seeded(formatMonthKey(month, 'long')))
+        },
+        onError: (error) => {
+          console.log(error)
+          toast.error(t.toast.seedError)
+        }
+      }
+    )
+  }
 
   const expenseCategories = useMemo(() => leafExpenseCategories(categoriesData), [categoriesData])
   const nameById = useMemo(
@@ -93,7 +117,7 @@ export function BudgetPanel(): React.JSX.Element {
           onEditLine={openEdit}
         />
       ) : (
-        <BudgetEmptyState onCreate={() => setFormOpen(true)} />
+        <BudgetEmptyState onStart={onStart} pending={seedFromPrevious.isPending} />
       )}
       <BudgetFormDialog open={formOpen} onOpenChange={setFormOpen} month={month} budget={budget} />
       {budget && (
@@ -248,7 +272,13 @@ function Stat({ label, amount }: { label: string; amount: number }): React.JSX.E
   )
 }
 
-function BudgetEmptyState({ onCreate }: { onCreate: () => void }): React.JSX.Element {
+function BudgetEmptyState({
+  onStart,
+  pending
+}: {
+  onStart: () => void
+  pending: boolean
+}): React.JSX.Element {
   return (
     <Empty>
       <EmptyHeader>
@@ -259,7 +289,7 @@ function BudgetEmptyState({ onCreate }: { onCreate: () => void }): React.JSX.Ele
         <EmptyDescription>{t.emptyDescription}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button onClick={onCreate}>
+        <Button onClick={onStart} disabled={pending}>
           <PlusIcon />
           {t.start}
         </Button>

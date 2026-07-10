@@ -9,6 +9,8 @@ const amountSchema = z.int().positive();
 
 export const getBudgetSchema = z.object({ month: monthSchema });
 
+export const seedFromPreviousSchema = z.object({ month: monthSchema });
+
 export const createBudgetSchema = z.object({
   month: monthSchema,
   income: amountSchema,

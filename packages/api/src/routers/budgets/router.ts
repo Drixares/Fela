@@ -6,6 +6,10 @@ import {
   createBudgetHandler,
 } from "./mutations/create-budget.js";
 import { removeLineBase, removeLineHandler } from "./mutations/remove-line.js";
+import {
+  seedFromPreviousBase,
+  seedFromPreviousHandler,
+} from "./mutations/seed-from-previous.js";
 import { setLineBase, setLineHandler } from "./mutations/set-line.js";
 import {
   updateBudgetBase,
@@ -28,6 +32,10 @@ export const budgetsRouter = base.router({
 
   create: createBudgetBase.handler(async ({ context, input }) => {
     return await call(createBudgetHandler, input, { context });
+  }),
+
+  seedFromPrevious: seedFromPreviousBase.handler(async ({ context, input }) => {
+    return await call(seedFromPreviousHandler, input, { context });
   }),
 
   update: updateBudgetBase.handler(async ({ context, input }) => {

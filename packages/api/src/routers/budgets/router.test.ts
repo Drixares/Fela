@@ -427,6 +427,105 @@ test("deleting a category drops its budget line and returns the amount to everyt
   });
 });
 
+test("budgets.seedFromPrevious copies income, total and all lines from the nearest prior month", async () => {
+  const context = createTestContext();
+  const rent = await makeCategory(context, "Loyer", "expense");
+  const groceries = await makeCategory(context, "Courses", "expense");
+
+  // An older month that must be ignored — only the *nearest* prior is copied.
+  await seedBudget(context, "2026-01", 200_000, 150_000);
+
+  // The nearest prior month, with two lines to copy.
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: rent, amount: 90_000 },
+    { context }
+  );
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: groceries, amount: 60_000 },
+    { context }
+  );
+
+  const seeded = await call(
+    appRouter.budgets.seedFromPrevious,
+    { month: "2026-05" },
+    { context }
+  );
+
+  expect(seeded).toEqual({
+    month: "2026-05",
+    income: 300_000,
+    totalBudget: 250_000,
+    lines: [
+      { categoryId: rent, amount: 90_000 },
+      { categoryId: groceries, amount: 60_000 },
+    ],
+    everythingElse: 100_000,
+  });
+
+  // The seeded budget is persisted — the next read returns the same view.
+  const fetched = await call(
+    appRouter.budgets.get,
+    { month: "2026-05" },
+    { context }
+  );
+  expect(fetched).toEqual(seeded);
+});
+
+test("budgets.seedFromPrevious is a no-op returning the existing budget when the month already has one", async () => {
+  const context = createTestContext();
+  const rent = await makeCategory(context, "Loyer", "expense");
+
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  // The target month already has its own budget with a distinct line.
+  await seedBudget(context, "2026-04", 320_000, 260_000);
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-04", categoryId: rent, amount: 80_000 },
+    { context }
+  );
+
+  const result = await call(
+    appRouter.budgets.seedFromPrevious,
+    { month: "2026-04" },
+    { context }
+  );
+
+  // Untouched — it keeps its own values, not March's.
+  expect(result).toEqual({
+    month: "2026-04",
+    income: 320_000,
+    totalBudget: 260_000,
+    lines: [{ categoryId: rent, amount: 80_000 }],
+    everythingElse: 180_000,
+  });
+});
+
+test("budgets.seedFromPrevious returns null when no earlier month exists", async () => {
+  const context = createTestContext();
+
+  // Nothing at all yet.
+  expect(
+    await call(
+      appRouter.budgets.seedFromPrevious,
+      { month: "2026-03" },
+      { context }
+    )
+  ).toBeNull();
+
+  // Only a *later* month exists — still nothing to copy from.
+  await seedBudget(context, "2026-05", 300_000, 250_000);
+  expect(
+    await call(
+      appRouter.budgets.seedFromPrevious,
+      { month: "2026-03" },
+      { context }
+    )
+  ).toBeNull();
+});
+
 test("budgeting beyond income is allowed", async () => {
   const context = createTestContext();
   await seedBudget(context, "2026-03", 100_000, 100_000);
