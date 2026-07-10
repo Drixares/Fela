@@ -47,6 +47,26 @@ export function formatMonthKey(key: string, variant: 'short' | 'long' = 'short')
   return (variant === 'long' ? monthLongFormatter : monthShortFormatter).format(date)
 }
 
+/** The current month as a `YYYY-MM` key, from the local clock. */
+export function currentMonthKey(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
+/**
+ * Shift a `YYYY-MM` key by a whole number of months (negative steps back). The
+ * arithmetic runs in UTC so the month never drifts across a timezone boundary,
+ * matching `formatMonthKey`.
+ */
+export function shiftMonthKey(key: string, delta: number): string {
+  const [year, month] = key.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1 + delta, 1))
+  const shiftedMonth = String(date.getUTCMonth() + 1).padStart(2, '0')
+  return `${date.getUTCFullYear()}-${shiftedMonth}`
+}
+
 /**
  * A date as `yyyy-mm-dd` in the local timezone — the value a native
  * `<input type="date">` expects. Built from the local parts (not `toISOString`,

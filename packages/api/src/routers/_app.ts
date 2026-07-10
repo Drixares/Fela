@@ -1,6 +1,7 @@
 import { implement } from "@orpc/server";
 import type { ServerContext } from "../context.js";
 import { accountsRouter } from "./accounts/router.js";
+import { budgetsRouter } from "./budgets/router.js";
 import { categoriesRouter } from "./categories/router.js";
 import { exportsRouter } from "./exports/router.js";
 import { importsRouter } from "./imports/router.js";
@@ -21,6 +22,7 @@ import { transfersRouter } from "./transfers/router.js";
 const appContract = {
   test: testRouter,
   accounts: accountsRouter,
+  budgets: budgetsRouter,
   categories: categoriesRouter,
   exports: exportsRouter,
   imports: importsRouter,

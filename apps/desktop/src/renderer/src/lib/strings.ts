@@ -34,11 +34,47 @@ export const strings = {
       recurring: 'Recurring',
       reports: 'Reports'
     },
-    // Onglet Budget : placeholder en attendant l'écriture du budget mensuel,
-    // câblée dans une slice ultérieure (voir issue #33).
+    // Onglet Budget : enveloppe mensuelle façon Origin (issue #35) — un revenu
+    // net, un budget total à répartir, et une ligne « Tout le reste » dérivée.
     budget: {
-      title: 'Budget à venir',
-      description: 'La gestion de votre budget mensuel arrive dans une prochaine version.'
+      // Sélecteur de mois (prev / next) en tête de l'onglet.
+      previousMonth: 'Mois précédent',
+      nextMonth: 'Mois suivant',
+      // État vide : aucun budget pour le mois sélectionné.
+      emptyTitle: 'Aucun budget pour ce mois',
+      emptyDescription: 'Définissez votre revenu net et le budget total à répartir pour commencer.',
+      start: 'Commencer à budgéter',
+      // En-tête revenu / budget une fois le budget créé.
+      incomeLabel: 'Revenu net',
+      totalBudgetLabel: 'Budget total',
+      edit: 'Modifier',
+      // Ligne dérivée : ce qui reste du total une fois les catégories réparties.
+      everythingElse: 'Tout le reste',
+      form: {
+        createTitle: 'Créer un budget',
+        createDescription: 'Saisissez votre revenu net mensuel et le budget total à répartir.',
+        editTitle: 'Modifier le budget',
+        editDescription: 'Ajustez votre revenu net ou le budget total à répartir.',
+        incomeLabel: 'Revenu net (€)',
+        incomePlaceholder: '3 000',
+        totalBudgetLabel: 'Budget total (€)',
+        totalBudgetPlaceholder: '2 500',
+        submitCreate: 'Créer le budget',
+        submitEdit: 'Enregistrer',
+        cancel: 'Annuler',
+        incomeRequired: 'Le revenu est requis.',
+        invalidIncome: 'Revenu invalide.',
+        positiveIncome: 'Le revenu doit être positif.',
+        totalBudgetRequired: 'Le budget total est requis.',
+        invalidTotalBudget: 'Budget total invalide.',
+        positiveTotalBudget: 'Le budget total doit être positif.'
+      },
+      toast: {
+        created: (month: string) => `Budget de ${month} créé.`,
+        updated: (month: string) => `Budget de ${month} mis à jour.`,
+        createError: 'Impossible de créer le budget.',
+        updateError: "Impossible d'enregistrer le budget."
+      }
     }
   },
   accounts: {
