@@ -86,6 +86,9 @@ de schéma.
 
 13. **Budgets simples** — un montant cible mensuel par catégorie ; les rapports
     comparent réalisé vs prévu (barre de progression). Nouvelle table `budgets`.
+    ⚠️ Rouvert par le modèle « Origin », plus léger (un total mensuel + un
+    « reste » dérivé, sans report ni money-to-assign) — voir
+    [ADR 0001](adr/0001-origin-budget-model.md).
 14. **Vérification de solde** — saisie du solde réel affiché par la banque,
     calcul de l'écart, création d'une transaction d'ajustement traçable
     (catégorie « Ajustement ») pour recaler.

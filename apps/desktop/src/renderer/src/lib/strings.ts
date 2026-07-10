@@ -23,6 +23,116 @@ export const strings = {
     title: 'Bientôt disponible',
     description: 'Le suivi de vos investissements arrive dans une prochaine version.'
   },
+  spending: {
+    // Onglets de la page Spending. Labels en anglais, comme la nav (« Home »,
+    // « Spending »…) : c'est le vocabulaire produit repris du dashboard Origin.
+    tabs: {
+      overview: 'Overview',
+      breakdown: 'Breakdown',
+      budget: 'Budget',
+      transactions: 'Transactions',
+      recurring: 'Recurring',
+      reports: 'Reports'
+    },
+    // Onglet Budget : enveloppe mensuelle façon Origin (issue #35) — un revenu
+    // net, un budget total à répartir, et une ligne « Tout le reste » dérivée.
+    budget: {
+      // Sélecteur de mois (prev / next) en tête de l'onglet.
+      previousMonth: 'Mois précédent',
+      nextMonth: 'Mois suivant',
+      // État vide : aucun budget pour le mois sélectionné.
+      emptyTitle: 'Aucun budget pour ce mois',
+      emptyDescription: 'Définissez votre revenu net et le budget total à répartir pour commencer.',
+      start: 'Commencer à budgéter',
+      // En-tête revenu / budget une fois le budget créé.
+      incomeLabel: 'Revenu net',
+      totalBudgetLabel: 'Budget total',
+      edit: 'Modifier',
+      // Ligne dérivée : ce qui reste du total une fois les catégories réparties.
+      everythingElse: 'Tout le reste',
+      form: {
+        createTitle: 'Créer un budget',
+        createDescription: 'Saisissez votre revenu net mensuel et le budget total à répartir.',
+        editTitle: 'Modifier le budget',
+        editDescription: 'Ajustez votre revenu net ou le budget total à répartir.',
+        incomeLabel: 'Revenu net (€)',
+        incomePlaceholder: '3 000',
+        totalBudgetLabel: 'Budget total (€)',
+        totalBudgetPlaceholder: '2 500',
+        submitCreate: 'Créer le budget',
+        submitEdit: 'Enregistrer',
+        cancel: 'Annuler',
+        incomeRequired: 'Le revenu est requis.',
+        invalidIncome: 'Revenu invalide.',
+        positiveIncome: 'Le revenu doit être positif.',
+        totalBudgetRequired: 'Le budget total est requis.',
+        invalidTotalBudget: 'Budget total invalide.',
+        positiveTotalBudget: 'Le budget total doit être positif.'
+      },
+      toast: {
+        created: (month: string) => `Budget de ${month} créé.`,
+        updated: (month: string) => `Budget de ${month} mis à jour.`,
+        seeded: (month: string) => `Budget de ${month} pré-rempli depuis le mois précédent.`,
+        createError: 'Impossible de créer le budget.',
+        updateError: "Impossible d'enregistrer le budget.",
+        seedError: 'Impossible de pré-remplir le budget.'
+      },
+      // Répartition du budget total en lignes par catégorie de dépense.
+      lines: {
+        sectionTitle: 'Répartition',
+        addCategory: 'Ajouter une catégorie',
+        emptyHint: "Aucune catégorie budgétée pour l'instant.",
+        editLabel: (name: string) => `Modifier ${name}`,
+        removeLabel: (name: string) => `Retirer ${name}`
+      },
+      lineForm: {
+        addTitle: 'Ajouter une catégorie',
+        addDescription: 'Choisissez une catégorie de dépense et le montant à lui allouer.',
+        editTitle: 'Modifier la catégorie',
+        editDescription: 'Ajustez le montant alloué à cette catégorie.',
+        categoryLabel: 'Catégorie',
+        categoryPlaceholder: 'Choisir une catégorie',
+        noCategories: 'Toutes les catégories de dépense sont déjà budgétées.',
+        amountLabel: 'Montant (€)',
+        amountPlaceholder: '500',
+        categoryRequired: 'La catégorie est requise.',
+        amountRequired: 'Le montant est requis.',
+        invalidAmount: 'Montant invalide.',
+        positiveAmount: 'Le montant doit être positif.',
+        submitAdd: 'Ajouter',
+        submitEdit: 'Enregistrer',
+        cancel: 'Annuler'
+      },
+      // Modale d'avertissement quand une ligne fait dépasser le budget total.
+      autoIncrease: {
+        title: 'Budget total augmenté',
+        description: (total: string) =>
+          `Vos catégories dépassent le budget total : il a été relevé à ${total} pour couvrir vos allocations.`,
+        confirm: 'Compris'
+      },
+      // Modale proposée après une modification : reporter le budget sur les mois
+      // suivants déjà budgétés (les mois passés ne sont jamais réécrits).
+      propagate: {
+        title: 'Appliquer aux mois suivants ?',
+        description:
+          'Reporter le revenu, le budget total et les catégories de ce mois sur tous les mois suivants déjà budgétés. Les mois précédents ne sont jamais modifiés.',
+        cancel: 'Non',
+        confirm: 'Oui, appliquer',
+        done: 'Compris',
+        appliedTitle: 'Mois mis à jour',
+        applied: (months: string) => `Le budget a été reporté sur : ${months}.`,
+        noneTitle: 'Aucun mois à mettre à jour',
+        none: "Aucun mois suivant n'a de budget à écraser.",
+        error: 'Impossible de reporter le budget.'
+      },
+      lineToast: {
+        saved: 'Catégorie budgétée.',
+        saveError: "Impossible d'enregistrer la catégorie.",
+        removed: 'Catégorie retirée.',
+        removeError: 'Impossible de retirer la catégorie.'
+      }
+    }
+  },
   accounts: {
     title: 'Comptes',
     empty: "Aucun compte pour l'instant.",

@@ -55,6 +55,15 @@ export type ExpenseGroupSegment = ExpensesByGroup['groups'][number]
 export type MonthlyCashFlow = Awaited<ReturnType<AppRouterClient['reports']['cashFlow']>>
 export type CashFlowMonthSegment = MonthlyCashFlow['months'][number]
 
+/**
+ * The monthly budget the renderer receives from `budgets.get` (see issue #35) —
+ * the net income and total to distribute, the category lines and the derived
+ * « everything else » remainder. `get` returns `null` for a month with no
+ * budget; this is the non-null shape. Inferred from the client contract so it
+ * can never drift from what the procedure returns.
+ */
+export type Budget = NonNullable<Awaited<ReturnType<AppRouterClient['budgets']['get']>>>
+
 const { port1: clientPort, port2: serverPort } = new MessageChannel()
 
 window.postMessage('start-orpc-client', '*', [serverPort])
