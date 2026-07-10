@@ -5,6 +5,8 @@ import {
   createBudgetBase,
   createBudgetHandler,
 } from "./mutations/create-budget.js";
+import { removeLineBase, removeLineHandler } from "./mutations/remove-line.js";
+import { setLineBase, setLineHandler } from "./mutations/set-line.js";
 import {
   updateBudgetBase,
   updateBudgetHandler,
@@ -30,5 +32,13 @@ export const budgetsRouter = base.router({
 
   update: updateBudgetBase.handler(async ({ context, input }) => {
     return await call(updateBudgetHandler, input, { context });
+  }),
+
+  setLine: setLineBase.handler(async ({ context, input }) => {
+    return await call(setLineHandler, input, { context });
+  }),
+
+  removeLine: removeLineBase.handler(async ({ context, input }) => {
+    return await call(removeLineHandler, input, { context });
   }),
 });

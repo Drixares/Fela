@@ -2,6 +2,7 @@ import { budgets } from "@repo/db";
 import { eq } from "drizzle-orm";
 import { base } from "src/context";
 
+import { loadBudgetLines } from "../utils/budget-lines";
 import { toBudgetView } from "../utils/budget-view";
 import { getBudgetSchema } from "../validators";
 
@@ -20,6 +21,8 @@ export const getBudgetHandler = getBudgetBase.handler(
       .where(eq(budgets.month, input.month))
       .get();
 
-    return budget ? toBudgetView(budget) : null;
+    return budget
+      ? toBudgetView(budget, loadBudgetLines(context.db, budget.id))
+      : null;
   }
 );

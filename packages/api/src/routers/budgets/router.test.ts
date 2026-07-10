@@ -1,6 +1,7 @@
 import { call } from "@orpc/server";
 import { expect, test } from "vitest";
 
+import type { ServerContext } from "../../context.js";
 import { createTestContext } from "../../test/context.js";
 import { appRouter } from "../_app.js";
 
@@ -170,4 +171,277 @@ test("budgets.update on a month with no budget rejects", async () => {
       { context }
     )
   ).rejects.toThrow();
+});
+
+/** Create an expense/income category and return its id — a line's target. */
+async function makeCategory(
+  context: ServerContext,
+  name: string,
+  kind: "expense" | "income"
+): Promise<number> {
+  const category = await call(
+    appRouter.categories.create,
+    { name, kind },
+    { context }
+  );
+  return category.id;
+}
+
+/** Seed a budget for a month and return the context so tests can add lines. */
+async function seedBudget(
+  context: ServerContext,
+  month: string,
+  income: number,
+  totalBudget: number
+): Promise<void> {
+  await call(
+    appRouter.budgets.create,
+    { month, income, totalBudget },
+    { context }
+  );
+}
+
+test("budgets.setLine on an expense category decreases everythingElse by that amount", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  const groceries = await makeCategory(context, "Courses", "expense");
+
+  const result = await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: groceries, amount: 60_000 },
+    { context }
+  );
+
+  expect(result).toMatchObject({
+    month: "2026-03",
+    totalBudget: 250_000,
+    lines: [{ categoryId: groceries, amount: 60_000 }],
+    everythingElse: 190_000,
+  });
+
+  const fetched = await call(
+    appRouter.budgets.get,
+    { month: "2026-03" },
+    { context }
+  );
+  expect(fetched).toMatchObject({
+    lines: [{ categoryId: groceries, amount: 60_000 }],
+    everythingElse: 190_000,
+  });
+});
+
+test("budgets.setLine on an income category is rejected", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  const salary = await makeCategory(context, "Salaire", "income");
+
+  await expect(
+    call(
+      appRouter.budgets.setLine,
+      { month: "2026-03", categoryId: salary, amount: 10_000 },
+      { context }
+    )
+  ).rejects.toThrow();
+});
+
+test("budgets.setLine on a non-existent category is rejected", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+
+  await expect(
+    call(
+      appRouter.budgets.setLine,
+      { month: "2026-03", categoryId: 9_999, amount: 10_000 },
+      { context }
+    )
+  ).rejects.toThrow();
+});
+
+test("budgets.setLine on a month with no budget is rejected", async () => {
+  const context = createTestContext();
+  const groceries = await makeCategory(context, "Courses", "expense");
+
+  await expect(
+    call(
+      appRouter.budgets.setLine,
+      { month: "2026-03", categoryId: groceries, amount: 10_000 },
+      { context }
+    )
+  ).rejects.toThrow();
+});
+
+test("budgets.setLine repeated on the same category upserts (no duplicate row)", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  const groceries = await makeCategory(context, "Courses", "expense");
+
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: groceries, amount: 60_000 },
+    { context }
+  );
+  const result = await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: groceries, amount: 80_000 },
+    { context }
+  );
+
+  expect(result.lines).toEqual([{ categoryId: groceries, amount: 80_000 }]);
+  expect(result.everythingElse).toBe(170_000);
+});
+
+test("budgets.setLine auto-increases the total when lines sum above it", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 300_000, 100_000);
+  const rent = await makeCategory(context, "Loyer", "expense");
+  const groceries = await makeCategory(context, "Courses", "expense");
+
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: rent, amount: 80_000 },
+    { context }
+  );
+
+  // 80_000 + 40_000 = 120_000 > 100_000 → total rises to 120_000.
+  const result = await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: groceries, amount: 40_000 },
+    { context }
+  );
+
+  expect(result.totalBudget).toBe(120_000);
+  expect(result.everythingElse).toBe(0);
+
+  // The raise persists — the next read sees the new total, never negative.
+  const fetched = await call(
+    appRouter.budgets.get,
+    { month: "2026-03" },
+    { context }
+  );
+  expect(fetched).toMatchObject({ totalBudget: 120_000, everythingElse: 0 });
+});
+
+test("budgets.removeLine returns the amount to everythingElse and leaves the total unchanged", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 300_000, 100_000);
+  const rent = await makeCategory(context, "Loyer", "expense");
+  const groceries = await makeCategory(context, "Courses", "expense");
+
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: rent, amount: 80_000 },
+    { context }
+  );
+  // Push above the total so it auto-increases to 120_000.
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: groceries, amount: 40_000 },
+    { context }
+  );
+
+  const result = await call(
+    appRouter.budgets.removeLine,
+    { month: "2026-03", categoryId: groceries },
+    { context }
+  );
+
+  // Total stays at the raised 120_000; the freed 40_000 flows to "everything else".
+  expect(result.totalBudget).toBe(120_000);
+  expect(result.lines).toEqual([{ categoryId: rent, amount: 80_000 }]);
+  expect(result.everythingElse).toBe(40_000);
+});
+
+test("budgets.removeLine on a line that was never set is a no-op", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  const groceries = await makeCategory(context, "Courses", "expense");
+
+  const result = await call(
+    appRouter.budgets.removeLine,
+    { month: "2026-03", categoryId: groceries },
+    { context }
+  );
+
+  expect(result.lines).toEqual([]);
+  expect(result.everythingElse).toBe(250_000);
+});
+
+test("budgets.update lowering the total below the sum of lines is rejected", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  const rent = await makeCategory(context, "Loyer", "expense");
+
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: rent, amount: 90_000 },
+    { context }
+  );
+
+  await expect(
+    call(
+      appRouter.budgets.update,
+      { month: "2026-03", totalBudget: 50_000 },
+      { context }
+    )
+  ).rejects.toThrow();
+
+  // A total at or above the sum of lines is still accepted.
+  const ok = await call(
+    appRouter.budgets.update,
+    { month: "2026-03", totalBudget: 90_000 },
+    { context }
+  );
+  expect(ok).toMatchObject({ totalBudget: 90_000, everythingElse: 0 });
+});
+
+test("deleting a category drops its budget line and returns the amount to everythingElse", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  const rent = await makeCategory(context, "Loyer", "expense");
+  const groceries = await makeCategory(context, "Courses", "expense");
+
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: rent, amount: 90_000 },
+    { context }
+  );
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: groceries, amount: 60_000 },
+    { context }
+  );
+
+  await call(appRouter.categories.delete, { id: groceries }, { context });
+
+  // The line for the deleted category is gone; its 60_000 flows back to
+  // "everything else" (250_000 − 90_000). No orphan line survives.
+  const fetched = await call(
+    appRouter.budgets.get,
+    { month: "2026-03" },
+    { context }
+  );
+  expect(fetched).toMatchObject({
+    totalBudget: 250_000,
+    lines: [{ categoryId: rent, amount: 90_000 }],
+    everythingElse: 160_000,
+  });
+});
+
+test("budgeting beyond income is allowed", async () => {
+  const context = createTestContext();
+  await seedBudget(context, "2026-03", 100_000, 100_000);
+  const rent = await makeCategory(context, "Loyer", "expense");
+
+  // A line larger than income auto-increases the total past income — not blocked.
+  const result = await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: rent, amount: 150_000 },
+    { context }
+  );
+
+  expect(result).toMatchObject({
+    income: 100_000,
+    totalBudget: 150_000,
+    everythingElse: 0,
+  });
 });

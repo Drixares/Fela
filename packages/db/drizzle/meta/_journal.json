@@ -43,6 +43,13 @@
       "when": 1783676962321,
       "tag": "0005_shocking_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1783679059014,
+      "tag": "0006_early_old_lace",
+      "breakpoints": true
     }
   ]
 }

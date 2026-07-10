@@ -20,3 +20,19 @@ export const updateBudgetSchema = z.object({
   income: amountSchema.optional(),
   totalBudget: amountSchema.optional(),
 });
+
+// A category id referenced by a budget line.
+const categoryIdSchema = z.int().positive();
+
+export const setLineSchema = z.object({
+  month: monthSchema,
+  categoryId: categoryIdSchema,
+  // Allocated amount in minor units (cents); non-negative (0 is allowed — the
+  // line still exists, it just carves out nothing).
+  amount: z.int().nonnegative(),
+});
+
+export const removeLineSchema = z.object({
+  month: monthSchema,
+  categoryId: categoryIdSchema,
+});

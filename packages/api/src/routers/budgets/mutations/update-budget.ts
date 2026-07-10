@@ -4,16 +4,16 @@ import { eq } from "drizzle-orm";
 import { base } from "src/context";
 
 import { budgetNotFound } from "../utils/budget-errors";
-import { type BudgetLine, toBudgetView } from "../utils/budget-view";
+import { loadBudgetLines } from "../utils/budget-lines";
+import { toBudgetView } from "../utils/budget-view";
 import { updateBudgetSchema } from "../validators";
 
 export const updateBudgetBase = base.input(updateBudgetSchema);
 
 /**
  * Edit a month's income and/or total budget. Only the fields sent are touched.
- * Lowering the total below the sum of existing category lines is refused (no
- * lines exist yet, so the guard is trivially satisfied today — it becomes
- * meaningful once category lines land).
+ * Lowering the total below the sum of existing category lines is refused — the
+ * lines already carve up that money, so the total can never drop under them.
  */
 export const updateBudgetHandler = updateBudgetBase.handler(
   async ({ context, input }) => {
@@ -29,8 +29,7 @@ export const updateBudgetHandler = updateBudgetBase.handler(
       throw budgetNotFound(month);
     }
 
-    // No category lines exist yet; once they do, sum their amounts here.
-    const lines: BudgetLine[] = [];
+    const lines = loadBudgetLines(context.db, existing.id);
     const allocated = lines.reduce((sum, line) => sum + line.amount, 0);
     const nextTotal = changes.totalBudget ?? existing.totalBudget;
     if (nextTotal < allocated) {

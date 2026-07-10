@@ -74,6 +74,45 @@ export const strings = {
         updated: (month: string) => `Budget de ${month} mis à jour.`,
         createError: 'Impossible de créer le budget.',
         updateError: "Impossible d'enregistrer le budget."
+      },
+      // Répartition du budget total en lignes par catégorie de dépense.
+      lines: {
+        sectionTitle: 'Répartition',
+        addCategory: 'Ajouter une catégorie',
+        emptyHint: "Aucune catégorie budgétée pour l'instant.",
+        editLabel: (name: string) => `Modifier ${name}`,
+        removeLabel: (name: string) => `Retirer ${name}`
+      },
+      lineForm: {
+        addTitle: 'Ajouter une catégorie',
+        addDescription: 'Choisissez une catégorie de dépense et le montant à lui allouer.',
+        editTitle: 'Modifier la catégorie',
+        editDescription: 'Ajustez le montant alloué à cette catégorie.',
+        categoryLabel: 'Catégorie',
+        categoryPlaceholder: 'Choisir une catégorie',
+        noCategories: 'Toutes les catégories de dépense sont déjà budgétées.',
+        amountLabel: 'Montant (€)',
+        amountPlaceholder: '500',
+        categoryRequired: 'La catégorie est requise.',
+        amountRequired: 'Le montant est requis.',
+        invalidAmount: 'Montant invalide.',
+        positiveAmount: 'Le montant doit être positif.',
+        submitAdd: 'Ajouter',
+        submitEdit: 'Enregistrer',
+        cancel: 'Annuler'
+      },
+      // Modale d'avertissement quand une ligne fait dépasser le budget total.
+      autoIncrease: {
+        title: 'Budget total augmenté',
+        description: (total: string) =>
+          `Vos catégories dépassent le budget total : il a été relevé à ${total} pour couvrir vos allocations.`,
+        confirm: 'Compris'
+      },
+      lineToast: {
+        saved: 'Catégorie budgétée.',
+        saveError: "Impossible d'enregistrer la catégorie.",
+        removed: 'Catégorie retirée.',
+        removeError: 'Impossible de retirer la catégorie.'
       }
     }
   },

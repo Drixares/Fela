@@ -1,5 +1,10 @@
 import { ORPCError } from "@orpc/server";
-import { categories, categorizationRules, transactions } from "@repo/db";
+import {
+  budgetLines,
+  categories,
+  categorizationRules,
+  transactions,
+} from "@repo/db";
 import { eq } from "drizzle-orm";
 import { base } from "src/context";
 
@@ -18,11 +23,14 @@ export const deleteCategoryBase = base.input(deleteCategorySchema);
  *
  * Categorization rules targeting the category follow the same reassignment;
  * without one they are deleted — a rule cannot file rows under nothing (see
- * issue #13).
+ * issue #13). Any budget lines that carved part of a month's total to the
+ * category are dropped outright — a deleted category is not budgetable, and the
+ * freed amount simply returns to that month's "everything else" (see issue #36).
  *
- * The re-point and the delete run in one SQL transaction, so neither a
- * transaction nor a rule can ever be left pointing at a category that no
- * longer exists.
+ * The re-point and the deletes run in one SQL transaction, so neither a
+ * transaction, a rule, nor a budget line can ever be left pointing at a category
+ * that no longer exists — this table doesn't enable FK enforcement, so the
+ * cascade is done here explicitly rather than relied on.
  *
  * @returns the deleted id and how many transactions were re-pointed.
  */
@@ -62,6 +70,7 @@ export const deleteCategoryHandler = deleteCategoryBase.handler(
           .where(eq(categorizationRules.categoryId, input.id))
           .run();
       }
+      tx.delete(budgetLines).where(eq(budgetLines.categoryId, input.id)).run();
       tx.delete(categories).where(eq(categories.id, input.id)).run();
       return affected.changes;
     });
