@@ -2,9 +2,11 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
   SidebarHeader,
-  SidebarNav,
-  sidebarNavItemVariants
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem
 } from '@repo/ui/components/sidebar'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
@@ -15,6 +17,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 
+import { cn } from '@repo/ui/lib/utils'
 import { strings } from '../../lib/strings'
 import { FelaLogo } from './FelaLogo'
 
@@ -32,42 +35,56 @@ const SETTINGS_NAV: NavEntry = {
   icon: SettingsIcon
 }
 
-function NavLink({ entry, active }: { entry: NavEntry; active: boolean }): React.JSX.Element {
-  const Icon = entry.icon
-  return (
-    <Link
-      to={entry.to}
-      // Exact match so the root `/` link doesn't report aria-current on every
-      // descendant route; keeps Link's a11y state aligned with the visual
-      // `active` highlight computed from the exact pathname.
-      activeOptions={{ exact: true }}
-      className={sidebarNavItemVariants({ active })}
-    >
-      <Icon />
-      <span>{entry.label}</span>
-    </Link>
-  )
-}
-
-/** Sidebar de l'app : logo, menu principal, item Réglages en pied. */
 export function AppSidebar(): React.JSX.Element {
   const { pathname } = useLocation()
+
   return (
-    <Sidebar>
-      <SidebarHeader>
+    // `collapsible="none"` renders the sidebar as a fixed column that can never
+    // collapse or close — it is always open. Its width is driven by the
+    // `--sidebar-width` CSS variable, which the resize handle in RootLayout drives.
+    <Sidebar collapsible="none">
+      <SidebarHeader className="h-20 justify-center">
         <FelaLogo />
       </SidebarHeader>
       <SidebarContent>
-        <SidebarNav>
-          {MAIN_NAV.map((entry) => (
-            <NavLink key={entry.to} entry={entry} active={pathname === entry.to} />
-          ))}
-        </SidebarNav>
+        <SidebarGroup>
+          <SidebarMenu>
+            {MAIN_NAV.map((entry) => {
+              const Icon = entry.icon
+
+              return (
+                <SidebarMenuItem key={entry.to}>
+                  <SidebarMenuButton
+                    className={cn(
+                      pathname === entry.to ? 'bg-sidebar-accent' : 'text-muted-foreground'
+                    )}
+                    render={(props) => (
+                      <Link to={entry.to} {...props} activeOptions={{ exact: true }} />
+                    )}
+                  >
+                    <Icon />
+                    <span>{entry.label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <SidebarNav>
-          <NavLink entry={SETTINGS_NAV} active={pathname === SETTINGS_NAV.to} />
-        </SidebarNav>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            className={cn(
+              pathname === SETTINGS_NAV.to ? 'bg-sidebar-accent' : 'text-muted-foreground'
+            )}
+            render={(props) => (
+              <Link to={SETTINGS_NAV.to} activeOptions={{ exact: true }} {...props} />
+            )}
+          >
+            <SETTINGS_NAV.icon />
+            <span>{SETTINGS_NAV.label}</span>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
       </SidebarFooter>
     </Sidebar>
   )

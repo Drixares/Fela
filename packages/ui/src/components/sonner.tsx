@@ -1,14 +1,14 @@
 "use client";
 
-import { useTheme } from "next-themes";
-import { Toaster as Sonner, type ToasterProps } from "sonner";
 import {
   CircleCheckIcon,
   InfoIcon,
-  TriangleAlertIcon,
-  OctagonXIcon,
   Loader2Icon,
+  OctagonXIcon,
+  TriangleAlertIcon,
 } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Toaster as Sonner, type ToasterProps } from "sonner";
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
@@ -42,8 +42,5 @@ const Toaster = ({ ...props }: ToasterProps) => {
   );
 };
 
-// Re-exported so consumers fire toasts through the design system rather than
-// depending on `sonner` directly.
 export { toast } from "sonner";
-
 export { Toaster };

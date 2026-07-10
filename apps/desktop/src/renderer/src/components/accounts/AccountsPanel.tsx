@@ -1,5 +1,3 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { type AccountType } from '@repo/api/client'
 import { Badge } from '@repo/ui/components/badge'
 import { Button } from '@repo/ui/components/button'
@@ -13,7 +11,9 @@ import {
   EmptyTitle
 } from '@repo/ui/components/empty'
 import { Skeleton } from '@repo/ui/components/skeleton'
+import { useQuery } from '@tanstack/react-query'
 import { ArchiveIcon, PencilIcon, PlusIcon, WalletIcon } from 'lucide-react'
+import { useState } from 'react'
 
 import { formatEur } from '../../lib/money'
 import { SECTIONS } from '../../lib/navigation'
