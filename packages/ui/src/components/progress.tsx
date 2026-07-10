@@ -10,7 +10,7 @@ function Progress({
   ...props
 }: ProgressPrimitive.Root.Props & { indicatorClassName?: string }) {
   return (
-    <ProgressPrimitive.Root data-slot="progress" {...props}>
+    <ProgressPrimitive.Root data-slot="progress" className="w-full" {...props}>
       <ProgressPrimitive.Track
         data-slot="progress-track"
         className={cn(
