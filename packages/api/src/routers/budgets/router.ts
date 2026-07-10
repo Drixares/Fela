@@ -2,6 +2,10 @@ import { call } from "@orpc/server";
 
 import { base } from "../../context.js";
 import {
+  applyToFutureBase,
+  applyToFutureHandler,
+} from "./mutations/apply-to-future.js";
+import {
   createBudgetBase,
   createBudgetHandler,
 } from "./mutations/create-budget.js";
@@ -48,5 +52,9 @@ export const budgetsRouter = base.router({
 
   removeLine: removeLineBase.handler(async ({ context, input }) => {
     return await call(removeLineHandler, input, { context });
+  }),
+
+  applyToFuture: applyToFutureBase.handler(async ({ context, input }) => {
+    return await call(applyToFutureHandler, input, { context });
   }),
 });

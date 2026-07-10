@@ -23,6 +23,7 @@ import { BudgetAutoIncreaseDialog } from './BudgetAutoIncreaseDialog'
 import { BudgetFormDialog } from './BudgetFormDialog'
 import { BudgetLineDialog, type EditingLine, type ExpenseCategoryOption } from './BudgetLineDialog'
 import { BudgetMonthSelector } from './BudgetMonthSelector'
+import { BudgetPropagateDialog } from './BudgetPropagateDialog'
 
 const t = strings.spending.budget
 
@@ -54,6 +55,11 @@ export function BudgetPanel(): React.JSX.Element {
   const [lineDialogOpen, setLineDialogOpen] = useState(false)
   const [editingLine, setEditingLine] = useState<EditingLine | undefined>(undefined)
   const [autoIncreaseTotal, setAutoIncreaseTotal] = useState<number | null>(null)
+  const [propagateOpen, setPropagateOpen] = useState(false)
+  // Set when an edit wants to offer propagation but an auto-increase dialog is
+  // showing first — the propagate offer waits until that dialog is dismissed so
+  // the two modals never stack.
+  const [propagatePending, setPropagatePending] = useState(false)
 
   const queryClient = useQueryClient()
   const { data, isLoading } = useQuery(orpc.budgets.get.queryOptions({ input: { month } }))
@@ -102,6 +108,19 @@ export function BudgetPanel(): React.JSX.Element {
     setLineDialogOpen(true)
   }
 
+  // Every edit to the month — income/total, or a category line — ends by offering
+  // to carry the change forward. When saving a line also raised the total, show
+  // that announcement first and defer the propagate offer until it is dismissed.
+  const offerPropagate = (): void => setPropagateOpen(true)
+  const onLineSaved = (autoIncreasedTo: number | null): void => {
+    if (autoIncreasedTo !== null) {
+      setAutoIncreaseTotal(autoIncreasedTo)
+      setPropagatePending(true)
+    } else {
+      offerPropagate()
+    }
+  }
+
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <BudgetMonthSelector month={month} onChange={setMonth} />
@@ -115,11 +134,19 @@ export function BudgetPanel(): React.JSX.Element {
           onEdit={() => setFormOpen(true)}
           onAddLine={openAdd}
           onEditLine={openEdit}
+          onLineRemoved={offerPropagate}
         />
       ) : (
         <BudgetEmptyState onStart={onStart} pending={seedFromPrevious.isPending} />
       )}
-      <BudgetFormDialog open={formOpen} onOpenChange={setFormOpen} month={month} budget={budget} />
+      <BudgetFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        month={month}
+        budget={budget}
+        onEdited={offerPropagate}
+      />
+      <BudgetPropagateDialog open={propagateOpen} onOpenChange={setPropagateOpen} month={month} />
       {budget && (
         <BudgetLineDialog
           open={lineDialogOpen}
@@ -128,13 +155,20 @@ export function BudgetPanel(): React.JSX.Element {
           options={addOptions}
           editing={editingLine}
           previousTotal={budget.totalBudget}
-          onAutoIncrease={setAutoIncreaseTotal}
+          onSaved={onLineSaved}
         />
       )}
       <BudgetAutoIncreaseDialog
         open={autoIncreaseTotal !== null}
         onOpenChange={(open) => {
-          if (!open) setAutoIncreaseTotal(null)
+          if (!open) {
+            setAutoIncreaseTotal(null)
+            // The raise has been acknowledged — now offer to propagate the edit.
+            if (propagatePending) {
+              setPropagatePending(false)
+              offerPropagate()
+            }
+          }
         }}
         newTotal={autoIncreaseTotal}
       />
@@ -148,7 +182,8 @@ function BudgetContent({
   canAdd,
   onEdit,
   onAddLine,
-  onEditLine
+  onEditLine,
+  onLineRemoved
 }: {
   budget: Budget
   nameById: Map<number, string>
@@ -156,6 +191,7 @@ function BudgetContent({
   onEdit: () => void
   onAddLine: () => void
   onEditLine: (line: EditingLine) => void
+  onLineRemoved: () => void
 }): React.JSX.Element {
   const queryClient = useQueryClient()
   const removeLine = useMutation(orpc.budgets.removeLine.mutationOptions())
@@ -167,6 +203,7 @@ function BudgetContent({
         onSuccess: () => {
           void queryClient.invalidateQueries({ queryKey: orpc.budgets.key() })
           toast.success(t.lineToast.removed)
+          onLineRemoved()
         },
         onError: (error) => {
           console.log(error)

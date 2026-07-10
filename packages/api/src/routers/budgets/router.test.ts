@@ -526,6 +526,207 @@ test("budgets.seedFromPrevious returns null when no earlier month exists", async
   ).toBeNull();
 });
 
+test("budgets.applyToFuture overwrites every strictly-posterior existing month with the source's income, total and lines", async () => {
+  const context = createTestContext();
+  const rent = await makeCategory(context, "Loyer", "expense");
+  const groceries = await makeCategory(context, "Courses", "expense");
+
+  // Source month with two lines.
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: rent, amount: 90_000 },
+    { context }
+  );
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-03", categoryId: groceries, amount: 60_000 },
+    { context }
+  );
+
+  // Two later months with their own, different values and lines.
+  await seedBudget(context, "2026-04", 100_000, 80_000);
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-04", categoryId: rent, amount: 10_000 },
+    { context }
+  );
+  await seedBudget(context, "2026-06", 120_000, 90_000);
+
+  const result = await call(
+    appRouter.budgets.applyToFuture,
+    { month: "2026-03" },
+    { context }
+  );
+
+  expect(result).toEqual({ affectedMonths: ["2026-04", "2026-06"] });
+
+  // Both later months now mirror the source exactly — income, total and lines.
+  const expectedView = {
+    income: 300_000,
+    totalBudget: 250_000,
+    lines: [
+      { categoryId: rent, amount: 90_000 },
+      { categoryId: groceries, amount: 60_000 },
+    ],
+    everythingElse: 100_000,
+  };
+  const april = await call(
+    appRouter.budgets.get,
+    { month: "2026-04" },
+    { context }
+  );
+  const june = await call(
+    appRouter.budgets.get,
+    { month: "2026-06" },
+    { context }
+  );
+  expect(april).toMatchObject(expectedView);
+  expect(june).toMatchObject(expectedView);
+});
+
+test("budgets.applyToFuture leaves the source month and all earlier months untouched", async () => {
+  const context = createTestContext();
+  const rent = await makeCategory(context, "Loyer", "expense");
+
+  await seedBudget(context, "2026-01", 200_000, 150_000);
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-01", categoryId: rent, amount: 20_000 },
+    { context }
+  );
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  await seedBudget(context, "2026-05", 100_000, 80_000);
+
+  await call(
+    appRouter.budgets.applyToFuture,
+    { month: "2026-03" },
+    { context }
+  );
+
+  // The earlier month keeps its own values and line.
+  const january = await call(
+    appRouter.budgets.get,
+    { month: "2026-01" },
+    { context }
+  );
+  expect(january).toMatchObject({
+    income: 200_000,
+    totalBudget: 150_000,
+    lines: [{ categoryId: rent, amount: 20_000 }],
+  });
+
+  // The source month itself is unchanged.
+  const march = await call(
+    appRouter.budgets.get,
+    { month: "2026-03" },
+    { context }
+  );
+  expect(march).toMatchObject({ income: 300_000, totalBudget: 250_000 });
+});
+
+test("budgets.applyToFuture does not create months that did not already exist", async () => {
+  const context = createTestContext();
+
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  // Only one later month exists; the gaps around it must stay empty.
+  await seedBudget(context, "2026-07", 100_000, 80_000);
+
+  const result = await call(
+    appRouter.budgets.applyToFuture,
+    { month: "2026-03" },
+    { context }
+  );
+
+  expect(result).toEqual({ affectedMonths: ["2026-07"] });
+
+  // A future month that never had a budget is still absent.
+  expect(
+    await call(appRouter.budgets.get, { month: "2026-05" }, { context })
+  ).toBeNull();
+});
+
+test("budgets.applyToFuture from a past month never rewrites months at or before it", async () => {
+  const context = createTestContext();
+
+  // A past month is edited to fix a typo, then propagated forward.
+  await seedBudget(context, "2026-02", 210_000, 180_000);
+  await seedBudget(context, "2026-04", 300_000, 250_000);
+  await seedBudget(context, "2026-06", 120_000, 90_000);
+
+  const result = await call(
+    appRouter.budgets.applyToFuture,
+    { month: "2026-04" },
+    { context }
+  );
+
+  // Only strictly-posterior months are affected; the past (2026-02) and the
+  // edited month (2026-04) are never propagated over.
+  expect(result).toEqual({ affectedMonths: ["2026-06"] });
+  const february = await call(
+    appRouter.budgets.get,
+    { month: "2026-02" },
+    { context }
+  );
+  expect(february).toMatchObject({ income: 210_000, totalBudget: 180_000 });
+});
+
+test("budgets.applyToFuture with no later months returns an empty affectedMonths", async () => {
+  const context = createTestContext();
+
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  // An earlier month exists but must not be affected.
+  await seedBudget(context, "2026-01", 200_000, 150_000);
+
+  const result = await call(
+    appRouter.budgets.applyToFuture,
+    { month: "2026-03" },
+    { context }
+  );
+
+  expect(result).toEqual({ affectedMonths: [] });
+});
+
+test("budgets.applyToFuture clears lines of a future month the source has none of", async () => {
+  const context = createTestContext();
+  const rent = await makeCategory(context, "Loyer", "expense");
+
+  // Source has no lines; the future month does — propagation must clear them.
+  await seedBudget(context, "2026-03", 300_000, 250_000);
+  await seedBudget(context, "2026-05", 100_000, 80_000);
+  await call(
+    appRouter.budgets.setLine,
+    { month: "2026-05", categoryId: rent, amount: 30_000 },
+    { context }
+  );
+
+  await call(
+    appRouter.budgets.applyToFuture,
+    { month: "2026-03" },
+    { context }
+  );
+
+  const may = await call(
+    appRouter.budgets.get,
+    { month: "2026-05" },
+    { context }
+  );
+  expect(may).toMatchObject({
+    income: 300_000,
+    totalBudget: 250_000,
+    lines: [],
+    everythingElse: 250_000,
+  });
+});
+
+test("budgets.applyToFuture on a month with no budget is rejected", async () => {
+  const context = createTestContext();
+
+  await expect(
+    call(appRouter.budgets.applyToFuture, { month: "2026-03" }, { context })
+  ).rejects.toThrow();
+});
+
 test("budgeting beyond income is allowed", async () => {
   const context = createTestContext();
   await seedBudget(context, "2026-03", 100_000, 100_000);

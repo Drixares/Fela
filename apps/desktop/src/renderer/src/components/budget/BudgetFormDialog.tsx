@@ -44,6 +44,8 @@ interface BudgetFormDialogProps {
   onOpenChange: (open: boolean) => void
   month: string
   budget?: Budget
+  /** Called after an existing budget is edited — the seam to offer propagation. */
+  onEdited?: () => void
 }
 
 /**
@@ -55,12 +57,18 @@ export function BudgetFormDialog({
   open,
   onOpenChange,
   month,
-  budget
+  budget,
+  onEdited
 }: BudgetFormDialogProps): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <BudgetForm month={month} budget={budget} onDone={() => onOpenChange(false)} />
+        <BudgetForm
+          month={month}
+          budget={budget}
+          onDone={() => onOpenChange(false)}
+          onEdited={onEdited}
+        />
       </DialogContent>
     </Dialog>
   )
@@ -69,11 +77,13 @@ export function BudgetFormDialog({
 function BudgetForm({
   month,
   budget,
-  onDone
+  onDone,
+  onEdited
 }: {
   month: string
   budget?: Budget
   onDone: () => void
+  onEdited?: () => void
 }): React.JSX.Element {
   const isEdit = budget !== undefined
   const queryClient = useQueryClient()
@@ -105,7 +115,11 @@ function BudgetForm({
       update.mutate(
         { month, income: values.income, totalBudget: values.totalBudget },
         {
-          onSuccess,
+          onSuccess: () => {
+            onSuccess()
+            // Offer to carry this edit forward to later months.
+            onEdited?.()
+          },
           onError: (error) => {
             console.log(error)
             return toast.error(t.toast.updateError)

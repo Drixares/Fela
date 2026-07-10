@@ -65,8 +65,12 @@ interface BudgetLineDialogProps {
   editing?: EditingLine
   /** The total the panel currently shows, to detect an auto-increase. */
   previousTotal: number
-  /** Called with the raised total when `setLine` pushes the total above `previousTotal`. */
-  onAutoIncrease: (newTotal: number) => void
+  /**
+   * Called after a line is saved. `autoIncreasedTo` is the raised total when
+   * `setLine` pushed the total above `previousTotal`, or `null` when it didn't —
+   * so the panel can announce the raise before offering to propagate the edit.
+   */
+  onSaved: (autoIncreasedTo: number | null) => void
 }
 
 /**
@@ -82,7 +86,7 @@ export function BudgetLineDialog({
   options,
   editing,
   previousTotal,
-  onAutoIncrease
+  onSaved
 }: BudgetLineDialogProps): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -92,7 +96,7 @@ export function BudgetLineDialog({
           options={options}
           editing={editing}
           previousTotal={previousTotal}
-          onAutoIncrease={onAutoIncrease}
+          onSaved={onSaved}
           onDone={() => onOpenChange(false)}
         />
       </DialogContent>
@@ -105,14 +109,14 @@ function BudgetLineForm({
   options,
   editing,
   previousTotal,
-  onAutoIncrease,
+  onSaved,
   onDone
 }: {
   month: string
   options: ExpenseCategoryOption[]
   editing?: EditingLine
   previousTotal: number
-  onAutoIncrease: (newTotal: number) => void
+  onSaved: (autoIncreasedTo: number | null) => void
   onDone: () => void
 }): React.JSX.Element {
   const isEdit = editing !== undefined
@@ -147,9 +151,7 @@ function BudgetLineForm({
           void queryClient.invalidateQueries({ queryKey: orpc.budgets.key() })
           toast.success(t.lineToast.saved)
           onDone()
-          if (result.totalBudget > previousTotal) {
-            onAutoIncrease(result.totalBudget)
-          }
+          onSaved(result.totalBudget > previousTotal ? result.totalBudget : null)
         },
         onError: (error) => {
           console.log(error)

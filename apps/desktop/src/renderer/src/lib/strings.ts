@@ -110,6 +110,21 @@ export const strings = {
           `Vos catégories dépassent le budget total : il a été relevé à ${total} pour couvrir vos allocations.`,
         confirm: 'Compris'
       },
+      // Modale proposée après une modification : reporter le budget sur les mois
+      // suivants déjà budgétés (les mois passés ne sont jamais réécrits).
+      propagate: {
+        title: 'Appliquer aux mois suivants ?',
+        description:
+          'Reporter le revenu, le budget total et les catégories de ce mois sur tous les mois suivants déjà budgétés. Les mois précédents ne sont jamais modifiés.',
+        cancel: 'Non',
+        confirm: 'Oui, appliquer',
+        done: 'Compris',
+        appliedTitle: 'Mois mis à jour',
+        applied: (months: string) => `Le budget a été reporté sur : ${months}.`,
+        noneTitle: 'Aucun mois à mettre à jour',
+        none: "Aucun mois suivant n'a de budget à écraser.",
+        error: 'Impossible de reporter le budget.'
+      },
       lineToast: {
         saved: 'Catégorie budgétée.',
         saveError: "Impossible d'enregistrer la catégorie.",

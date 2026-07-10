@@ -1,8 +1,8 @@
-import { budgetLines, budgets } from "@repo/db";
+import { budgets } from "@repo/db";
 import { desc, eq, lt } from "drizzle-orm";
 import { base } from "src/context";
 
-import { loadBudgetLines } from "../utils/budget-lines";
+import { loadBudgetLines, replaceBudgetLines } from "../utils/budget-lines";
 import { toBudgetView } from "../utils/budget-view";
 import { seedFromPreviousSchema } from "../validators";
 
@@ -61,20 +61,9 @@ export const seedFromPreviousHandler = seedFromPreviousBase.handler(
         .returning()
         .get();
 
-      // Copy the source's lines verbatim. They were validated when first set, so
-      // no category re-check is needed — this only duplicates existing rows.
-      const sourceLines = loadBudgetLines(tx, source.id);
-      if (sourceLines.length > 0) {
-        tx.insert(budgetLines)
-          .values(
-            sourceLines.map((line) => ({
-              budgetId: created.id,
-              categoryId: line.categoryId,
-              amount: line.amount,
-            }))
-          )
-          .run();
-      }
+      // Copy the source's lines onto the freshly-created budget (which has none
+      // yet, so the clear inside is a no-op).
+      replaceBudgetLines(tx, created.id, loadBudgetLines(tx, source.id));
 
       return toBudgetView(created, loadBudgetLines(tx, created.id));
     });
