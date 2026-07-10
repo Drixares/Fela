@@ -23,6 +23,24 @@ export const strings = {
     title: 'Bientôt disponible',
     description: 'Le suivi de vos investissements arrive dans une prochaine version.'
   },
+  spending: {
+    // Onglets de la page Spending. Labels en anglais, comme la nav (« Home »,
+    // « Spending »…) : c'est le vocabulaire produit repris du dashboard Origin.
+    tabs: {
+      overview: 'Overview',
+      breakdown: 'Breakdown',
+      budget: 'Budget',
+      transactions: 'Transactions',
+      recurring: 'Recurring',
+      reports: 'Reports'
+    },
+    // Onglet Budget : placeholder en attendant l'écriture du budget mensuel,
+    // câblée dans une slice ultérieure (voir issue #33).
+    budget: {
+      title: 'Budget à venir',
+      description: 'La gestion de votre budget mensuel arrive dans une prochaine version.'
+    }
+  },
   accounts: {
     title: 'Comptes',
     empty: "Aucun compte pour l'instant.",
